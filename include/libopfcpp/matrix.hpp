@@ -100,7 +100,7 @@ Mat<float> compute_train_distances(const Mat<T> &features, distance_function dis
 }
 
 template <class T>
-Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_data)
+Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_data, distance_function distance=euclidean_distance<float>)
 {
     Mat<float> distances = make_mat<float>(test_data.size(), train_data.size());
 
@@ -108,7 +108,7 @@ Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_d
     {
         for (int j = 0; j < train_data.size(); j++)
         {
-            distances[i][j] = euclidean_distance(test_data[i], train_data[j]);
+            distances[i][j] = distance(test_data[i], train_data[j]);
         }
     }
 
