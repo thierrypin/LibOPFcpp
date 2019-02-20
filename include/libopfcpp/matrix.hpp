@@ -3,7 +3,7 @@
 #define MATRIX_HPP
 
 #include <functional>
-
+#include <iostream>
 namespace opf
 {
 
@@ -48,7 +48,7 @@ template <class T, class U=float>
 U euclidean_distance(const std::vector<T> &a, const std::vector<T> &b)
 {
     U sum = 0;
-    for (int i = 0; i < a.size(); i++)
+    for (size_t i = 0; i < a.size(); i++)
     {
         sum += pow(a[i]-b[i], 2);
     }
