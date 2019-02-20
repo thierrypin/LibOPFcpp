@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <random>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <map>
@@ -23,7 +25,7 @@ bool read_mat(const std::string &filename, Mat<T> &data)
 
     if (!file.is_open())
     {
-        std::cerr << "Could not open file: " << filename << std::endl;
+        std::cerr << "[util/read_mat] Could not open file: " << filename << std::endl;
         return false;
     }
 
@@ -54,7 +56,7 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
 
     if (!file.is_open())
     {
-        std::cerr << "Could not open file: " << filename << std::endl;
+        std::cerr << "[util/read_mat_labels] Could not open file: " << filename << std::endl;
         return false;
     }
 
@@ -94,7 +96,7 @@ bool write_mat(const std::string &filename, const Mat<T> &data)
         cols = data[0].size();
     if (rows == 0 || cols == 0)
     {
-        std::cerr << "Invalid data size:" << rows << ", " << cols << std::endl;
+        std::cerr << "[util/write_mat] Invalid data size:" << rows << ", " << cols << std::endl;
         return false;
     }
 
@@ -102,7 +104,7 @@ bool write_mat(const std::string &filename, const Mat<T> &data)
 
     if (!file.is_open())
     {
-        std::cerr << "Could not open file: " << filename << std::endl;
+        std::cerr << "[util/write_mat] Could not open file: " << filename << std::endl;
         return false;
     }
 
@@ -127,14 +129,14 @@ bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std
         cols = data[0].size();
     if (rows == 0 || cols == 0)
     {
-        std::cerr << "Invalid data size:" << rows << ", " << cols << std::endl;
+        std::cerr << "[util/write_mat_labels] Invalid data size:" << rows << ", " << cols << std::endl;
         return false;
     }
 
     std::ofstream file (filename, std::ios::out | std::ios::binary);
     if (!file.is_open())
     {
-        std::cerr << "Could not open file: " << filename << std::endl;
+        std::cerr << "[util/write_mat_labels] Could not open file: " << filename << std::endl;
         return false;
     }
 
@@ -158,9 +160,23 @@ bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std
     return true;
 }
 
+class StratifiedShuffleSplit
+{
+private:
+    float train_ratio;
+    std::default_random_engine random_engine;
+    
+public:
+    StratifiedShuffleSplit(float train_ratio = 0.5) : train_ratio(train_ratio)
+    {
+        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+        this->random_engine = std::default_random_engine(seed);
+    }
+    std::pair<std::vector<int>, std::vector<int>> split(const std::vector<int> &labels);
+};
 
 // train indices, test indices
-std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float train_ratio, const std::vector<int> &labels)
+std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(const std::vector<int> &labels)
 {
     std::map<int, int> totals, target, current;
     std::map<int, int>::iterator it;
@@ -174,7 +190,7 @@ std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float tra
     // Find the number of samples for each class
     for (it = totals.begin(); it != totals.end(); ++it)
     {
-        target[it->first] = (int) round((float)it->second * train_ratio);
+        target[it->first] = (int) round((float)it->second * this->train_ratio);
         train_sz += target[it->first];
     }
     test_sz = labels.size() - train_sz;
@@ -188,7 +204,8 @@ std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float tra
     for (int i = 0; i < labels.size(); i++)
         idx[i] = i;
     
-    std::random_shuffle(idx.begin(), idx.end());
+    std::shuffle(idx.begin(), idx.end(), this->random_engine);
+
     // Assign folds
     int j, l;
     int train_idx = 0, test_idx = 0;
@@ -225,18 +242,24 @@ void from_indices(const std::vector<T> &data, const std::vector<int> &indices, s
 }
 
 
-// Computes accuracy according to: TODO (Insert reference)
-float opf_accuracy(const vector<int> preds, const vector<int> ground_truth)
+// Compute Papa's accuracy 
+// Papa, João & Falcão, Alexandre & Suzuki, C.T.N.. (2009). Supervised Pattern Classification Based on Optimum-Path Forest. International Journal of Imaging Systems and Technology. 19. 120 - 131. 10.1002/ima.20188. 
+float papa_accuracy(const std::vector<int> preds, const std::vector<int> ground_truth)
 {
+    if (ground_truth.size() != preds.size())
+    {
+        std::cerr << "[util/papa_accuracy] Error: ground truth and prediction sizes do not match. " << ground_truth.size() << " x " << preds.size() << std::endl;
+    }
+
     int rows = ground_truth.size();
-    set<int> s(ground_truth.begin(), ground_truth.end());
+    std::set<int> s(ground_truth.begin(), ground_truth.end());
     int nlabels = s.size();
 
-    vector<int> class_occ(nlabels+1, 0);
+    std::vector<int> class_occ(nlabels+1, 0);
     for (int i = 0; i < rows; i++)
         class_occ[ground_truth[i]]++;
 
-    Mat<float> errors = std::vector<vector<float>>(nlabels+1, std::vector<float>(2, 0));
+    Mat<float> errors = std::vector<std::vector<float>>(nlabels+1, std::vector<float>(2, 0));
 
     for (int i = 0; i < rows; i++)
     {
@@ -272,7 +295,22 @@ float opf_accuracy(const vector<int> preds, const vector<int> ground_truth)
     return 1. - (error / (2.0 * nlabels));;
 }
 
+float accuracy(const std::vector<int> ground_truth, const std::vector<int> preds)
+{
+    if (ground_truth.size() != preds.size())
+    {
+        std::cerr << "[util/accuracy] Error: ground truth and prediction sizes do not match. " << ground_truth.size() << " x " << preds.size() << std::endl;
+    }
 
+    int n = ground_truth.size();
+    float acc = 0;
+    for (int i = 0; i < n; i++)
+        if (ground_truth[i] == preds[i])
+            acc++;
+
+    return acc / n;
+
+}
 
 
 }

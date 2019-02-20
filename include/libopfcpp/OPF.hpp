@@ -252,7 +252,7 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 {
 	if (train_data.size() != labels.size())
 	{
-		std::cerr << "Error: data size does not match labels size: " << train_data.size() << " x " << labels.size() << std::endl;
+		std::cerr << "[OPF/fit] Error: data size does not match labels size: " << train_data.size() << " x " << labels.size() << std::endl;
 		exit(1);
 	}
 	// Store data reference for testing
