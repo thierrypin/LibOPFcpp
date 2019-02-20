@@ -96,7 +96,7 @@ public:
 		this->nodes = nodes;
 		size_t n = nodes->size();
 		this->vec.reserve(n);
-		for (int i = 0; i < n; i++)
+		for (size_t i = 0; i < n; i++)
 		{
 			(*this->nodes)[i].index = i;
 			(*this->nodes)[i].true_label = (*this->nodes)[i].label = labels[i];
@@ -337,7 +337,7 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 
 	for (int i = 0; i < n_test_samples; i++)
 	{
-		int j = 0;
+		
 		int idx = this->ordered_nodes[0];
 		int min_idx;
 		float min_cost = INF;
