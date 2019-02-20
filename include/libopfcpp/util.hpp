@@ -160,7 +160,7 @@ bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std
 
 
 // train indices, test indices
-std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float train_ratio, const vector<int> &labels)
+std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float train_ratio, const std::vector<int> &labels)
 {
     std::map<int, int> totals, target, current;
     std::map<int, int>::iterator it;
@@ -213,16 +213,65 @@ std::pair<std::vector<int>, std::vector<int>> stratified_shuffle_split(float tra
 
 
 template <class T>
-void from_indices(const vector<T> &data, const vector<int> &indices, vector<T> &output)
+void from_indices(const std::vector<T> &data, const std::vector<int> &indices, std::vector<T> &output)
 {
     int size = indices.size();
-    output = vector<T>(size);
+    output = std::vector<T>(size);
 
     for (int i = 0; i < size; i++)
     {
         output[i] = data[indices[i]];
     }
 }
+
+
+// Computes accuracy according to: TODO (Insert reference)
+float opf_accuracy(const vector<int> preds, const vector<int> ground_truth)
+{
+    int rows = ground_truth.size();
+    set<int> s(ground_truth.begin(), ground_truth.end());
+    int nlabels = s.size();
+
+    vector<int> class_occ(nlabels+1, 0);
+    for (int i = 0; i < rows; i++)
+        class_occ[ground_truth[i]]++;
+
+    Mat<float> errors = std::vector<vector<float>>(nlabels+1, std::vector<float>(2, 0));
+
+    for (int i = 0; i < rows; i++)
+    {
+        if (ground_truth[i] != preds[i])
+        {
+            errors[preds[i]][0]++;
+            errors[ground_truth[i]][1]++;
+        }
+    }
+
+    int label_count = 0;
+
+    for (int i = 1; i <= nlabels; i++)
+    {
+        if (class_occ[i] != 0)
+        {
+            errors[i][0] /= (float) (rows - class_occ[i]);
+            errors[i][1] /= (float) class_occ[i];
+            label_count++;
+        }
+    }
+
+    float error = 0.;
+
+    for (int i = 1; i <= nlabels; i++)
+    {
+        if (class_occ[i] != 0)
+        {
+            error += errors[i][0] + errors[i][1];
+        }
+    }
+
+    return 1. - (error / (2.0 * nlabels));;
+}
+
 
 
 

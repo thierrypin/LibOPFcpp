@@ -20,17 +20,17 @@ using Mat = std::vector<std::vector<T>>;
 template <class T>
 Mat<T> make_mat(int rows, int cols)
 {
-    return std::vector<vector<T>>(rows, std::vector<T>(cols));
+    return std::vector<std::vector<T>>(rows, std::vector<T>(cols));
 }
 
 
 template <class T>
-void print_vector(vector<T> v)
+void print_vector(std::vector<T> v)
 {
-    cout << "[";
+    std::cout << "[";
     for (int i = 0; i < v.size(); i++)
-        cout << v[i] << ' ';
-    cout << "]";
+        std::cout << v[i] << ' ';
+    std::cout << "]";
 }
 
 template <class T>
@@ -39,9 +39,9 @@ void print_matrix(Mat<T> m)
     for (int i = 0; i < m.size(); i++)
     {
         print_vector(m[i]);
-        cout << '\n';
+        std::cout << '\n';
     }
-    cout << endl;
+    std::cout << std::endl;
 }
 
 template <class T, class U=float>

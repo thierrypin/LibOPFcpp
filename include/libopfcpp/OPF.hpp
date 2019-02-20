@@ -252,7 +252,7 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 {
 	if (train_data.size() != labels.size())
 	{
-		cerr << "Error: data size does not match labels size: " << train_data.size() << " x " << labels.size() << endl;
+		std::cerr << "Error: data size does not match labels size: " << train_data.size() << " x " << labels.size() << std::endl;
 		exit(1);
 	}
 	// Store data reference for testing
@@ -302,7 +302,7 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 				else
 					weight = distance(this->train_data[s], this->train_data[t]);
 
-				float cost = max(weight, this->nodes[s].cost);
+				float cost = std::max(weight, this->nodes[s].cost);
 				if (cost < this->nodes[t].cost)
 				{
 					this->nodes[t].pred = s;
@@ -357,7 +357,7 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 				weight = distance(test_data[i], this->train_data[idx]);
 
 			// The cost corresponds to the max between the distance and the reference cost
-			float cost = max(weight, this->nodes[idx].cost);
+			float cost = std::max(weight, this->nodes[idx].cost);
 
 			if (cost < min_cost)
 			{
