@@ -3,7 +3,7 @@
 #define MATRIX_HPP
 
 #include <functional>
-
+#include <iostream>
 namespace opf
 {
 
