@@ -327,13 +327,13 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
  *    - a vector<int> of size [n_test_samples] with classification outputs.
  */
 template <class T>
-vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
+std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 {
 	int n_test_samples = test_data.size();
 	int n_train_samples = this->nodes.size();
 
 	// Output predictions
-	vector<int> predictions(n_test_samples);
+	std::vector<int> predictions(n_test_samples);
 
 	for (int i = 0; i < n_test_samples; i++)
 	{
