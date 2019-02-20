@@ -27,7 +27,6 @@
 #include <map>
 #include <limits>
 #include <algorithm>
-#include <functional>
 #include <cmath>
 
 #include "libopfcpp/matrix.hpp"
@@ -37,9 +36,6 @@ namespace opf
 
 #define INF std::numeric_limits<float>::infinity()
 #define NIL -1
-
-using distance_function = std::function<float (std::vector<float>, std::vector<float>)>;
-
 
 
 /*****************************************/

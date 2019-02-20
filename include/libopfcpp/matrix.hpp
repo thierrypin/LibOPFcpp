@@ -1,5 +1,8 @@
 
-#include "libopfcpp/OPF.hpp"
+#ifndef MATRIX_HPP
+#define MATRIX_HPP
+
+#include <functional>
 
 namespace opf
 {
@@ -8,6 +11,8 @@ namespace opf
 /*****************************************/
 /************** Matrix type **************/
 /*****************************************/
+
+using distance_function = std::function<float (std::vector<float>, std::vector<float>)>;
 
 template <class T>
 using Mat = std::vector<std::vector<T>>;
@@ -25,16 +30,18 @@ void print_vector(vector<T> v)
     cout << "[";
     for (int i = 0; i < v.size(); i++)
         cout << v[i] << ' ';
-    cout << "]" << endl;
+    cout << "]";
 }
 
 template <class T>
 void print_matrix(Mat<T> m)
 {
-    cout << "["
     for (int i = 0; i < m.size(); i++)
+    {
         print_vector(m[i]);
-    cout << "]" << endl;
+        cout << '\n';
+    }
+    cout << endl;
 }
 
 template <class T, class U=float>
@@ -52,7 +59,7 @@ template <class T, class U=float>
 U magnitude(const std::vector<T> &v)
 {
     U sum = 0;
-    for (int i = 0; i < a.size(); i++)
+    for (int i = 0; i < v.size(); i++)
     {
         sum += pow(v[i], 2);
     }
@@ -70,11 +77,12 @@ U cosine_distance(const std::vector<T> &a, const std::vector<T> &b)
 
     U divisor = magnitude<T>(a) * magnitude<T>(b);
 
+    // 1 - cosine similarity
     return 1 - (dividend / divisor);
 }
 
 template <class T>
-Mat<float> compute_train_distances(const Mat<T> &features)
+Mat<float> compute_train_distances(const Mat<T> &features, distance_function distance=euclidean_distance<float>)
 {
     Mat<float> distances = make_mat<float>(features.size(), features.size());
     for (int i = 0; i < features.size(); i++)
@@ -84,7 +92,7 @@ Mat<float> compute_train_distances(const Mat<T> &features)
     {
         for (int j = i + 1; j < features.size(); j++)
         {
-            distances[i][j] = distances[j][i] = euclidean_distance(features[i], features[j]);
+            distances[i][j] = distances[j][i] = distance(features[i], features[j]);
         }
     }
 
@@ -111,3 +119,5 @@ Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_d
 
 
 }
+
+#endif
