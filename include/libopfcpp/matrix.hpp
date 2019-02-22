@@ -58,6 +58,7 @@ public:
     int size;
     Mat();
     Mat(Mat<T>& other);
+    Mat(const Mat<T>& other);
     Mat(int rows, int cols);
     Mat(int rows, int cols, T val);
     Mat(std::shared_ptr<T>& data, int rows, int cols);
@@ -78,6 +79,15 @@ Mat<T>::Mat()
 
 template <class T>
 Mat<T>::Mat(Mat<T>& other)
+{
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->size = other.size;
+    this->data = other.data;
+}
+
+template <class T>
+Mat<T>::Mat(const Mat<T>& other)
 {
     this->rows = other.rows;
     this->cols = other.cols;

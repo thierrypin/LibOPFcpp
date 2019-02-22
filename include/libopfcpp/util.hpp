@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 
 #include <cmath>
 
@@ -82,7 +83,7 @@ T cosine_distance(const T* a, const T* b, int size)
 }
 
 template <class T>
-Mat<float> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
+Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(features.rows, features.rows);
     for (int i = 0; i < features.rows; i++)
@@ -190,10 +191,8 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
 template <class T>
 bool write_mat(const std::string &filename, const Mat<T> &data)
 {
-    int rows, cols = 0;
-    rows = data.rows;
-    if (rows > 0)
-        cols = data[0].cols;
+    int rows = data.rows;
+    int cols = data.cols;
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat] Invalid data size:" << rows << ", " << cols << std::endl;
@@ -223,10 +222,8 @@ bool write_mat(const std::string &filename, const Mat<T> &data)
 template <class T>
 bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std::vector<int> &labels)
 {
-    int rows, cols = 0;
-    rows = data.rows;
-    if (rows > 0)
-        cols = data[0].cols;
+    int rows = data.rows;
+    int cols = data.cols;
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat_labels] Invalid data size:" << rows << ", " << cols << std::endl;
