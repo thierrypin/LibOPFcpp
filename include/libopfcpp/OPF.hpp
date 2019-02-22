@@ -30,6 +30,7 @@
 #include <cmath>
 
 #include "libopfcpp/matrix.hpp"
+#include "libopfcpp/util.hpp"
 
 namespace opf
 {
@@ -164,21 +165,24 @@ private:
 
 	// Options
 	bool precomputed;
-	distance_function distance;
+	distance_function<T> distance;
 
 	void prim_prototype(const std::vector<int> &labels);
 
 
 public:
-	SupervisedOPF(bool precomputed=false, distance_function distance=euclidean_distance<float>)
-	{
-		this->precomputed = precomputed;
-		this->distance = distance;
-	}
+	SupervisedOPF(bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
 	
 	void fit(const Mat<T> &train_data, const std::vector<int> &labels);
 	std::vector<int> predict(const Mat<T> &test_data);
 };
+
+template <class T>
+SupervisedOPF<T>::SupervisedOPF(bool precomputed, distance_function<T> distance)
+{
+	this->precomputed = precomputed;
+	this->distance = distance;
+}
 
 /**
  * - The first step in OPF's training procedure. Finds the prototype nodes using Prim's
@@ -188,7 +192,7 @@ public:
 template <class T>
 void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 {
-	this->nodes = std::vector<Node>(this->train_data.size());
+	this->nodes = std::vector<Node>(this->train_data.rows);
 	Heap h(&this->nodes, labels); // Heap as a priority queue
 
 	// Arbitrary first node
@@ -224,7 +228,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 				if (this->precomputed)
 					weight = this->train_data[s][t];
 				else
-					weight = this->distance(this->train_data[s], this->train_data[t]);
+					weight = this->distance(this->train_data[s], this->train_data[t], this->train_data.cols);
 				
 				// Assign if smaller than current value
 				if (weight < this->nodes[t].cost)
@@ -237,6 +241,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 	}
 }
 
+// TODO AQUI ******************************
 /**
  * Trains the model with the given data and labels.
  * 
@@ -250,9 +255,9 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 template <class T>
 void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &labels)
 {
-	if (train_data.size() != labels.size())
+	if (train_data.rows != labels.size())
 	{
-		std::cerr << "[OPF/fit] Error: data size does not match labels size: " << train_data.size() << " x " << labels.size() << std::endl;
+		std::cerr << "[OPF/fit] Error: data size does not match labels size: " << train_data.rows << " x " << labels.size() << std::endl;
 		exit(1);
 	}
 	// Store data reference for testing
@@ -300,7 +305,7 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 				if (precomputed)
 					weight = this->train_data[s][t];
 				else
-					weight = distance(this->train_data[s], this->train_data[t]);
+					weight = distance(this->train_data[s], this->train_data[t], this->train_data.cols);
 
 				float cost = std::max(weight, this->nodes[s].cost);
 				if (cost < this->nodes[t].cost)
@@ -329,7 +334,7 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 template <class T>
 std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 {
-	int n_test_samples = test_data.size();
+	int n_test_samples = test_data.rows;
 	int n_train_samples = this->nodes.size();
 
 	// Output predictions
@@ -340,8 +345,8 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 		
 		int idx = this->ordered_nodes[0];
 		int min_idx;
-		float min_cost = INF;
-		float weight = 0;
+		T min_cost = INF;
+		T weight = 0;
 
 		// 'ordered_nodes' contains sample indices ordered by cost, so if the current
 		// best connection costs less than the next node, it is useless to keep looking.
@@ -354,7 +359,7 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 			if (precomputed)
 				weight = test_data[i][idx];
 			else
-				weight = distance(test_data[i], this->train_data[idx]);
+				weight = distance(test_data[i], this->train_data[idx], this->train_data.cols);
 
 			// The cost corresponds to the max between the distance and the reference cost
 			float cost = std::max(weight, this->nodes[idx].cost);

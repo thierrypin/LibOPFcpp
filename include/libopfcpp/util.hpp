@@ -18,6 +18,106 @@
 namespace opf
 {
 
+
+template <class T>
+void print_vector(T* v, int size)
+{
+    std::cout << "[";
+    for (int i = 0; i < size; i++)
+        std::cout << v[i] << ' ';
+    std::cout << "]";
+}
+
+template <class T>
+void print_matrix(Mat<T> m)
+{
+    for (int i = 0; i < m.size(); i++)
+    {
+        T* row = m.row(i);
+        print_vector(row, m.cols);
+        std::cout << '\n';
+    }
+    std::cout << std::endl;
+}
+
+template <class T>
+using distance_function = std::function<T (const T*, const T*, int)>;
+
+
+template <class T>
+T euclidean_distance(const T* a, const T* b, int size)
+{
+    T sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        sum += pow(a[i]-b[i], 2);
+    }
+    return (T)sqrt(sum);
+}
+
+template <class T>
+T magnitude(const T* v, int size)
+{
+    T sum = 0;
+    for (int i = 0; i < size; i++)
+    {
+        sum += pow(v[i], 2);
+    }
+    return (T)sqrt(sum);
+}
+
+template <class T>
+T cosine_distance(const T* a, const T* b, int size)
+{
+    T dividend = 0;
+    for (int i = 0; i < size; i++)
+    {
+        dividend += a[i] * b[i];
+    }
+
+    T divisor = magnitude<T>(a, size) * magnitude<T>(b, size);
+
+    // 1 - cosine similarity
+    return 1 - (dividend / divisor);
+}
+
+template <class T>
+Mat<float> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
+{
+    Mat<float> distances(features.rows, features.rows);
+    for (int i = 0; i < features.rows; i++)
+        distances[i][i] = 0;
+
+    for (int i = 0; i < features.rows - 1; i++)
+    {
+        for (int j = i + 1; j < features.rows; j++)
+        {
+            distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
+        }
+    }
+
+    return distances;
+}
+
+template <class T>
+Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_data, distance_function<T> distance=euclidean_distance<T>)
+{
+    Mat<float> distances(test_data.rows, train_data.rows);
+    int vec_size = train_data.cols;
+
+    for (int i = 0; i < distances.rows; i++)
+    {
+        for (int j = 0; j < distances.cols; j++)
+        {
+            distances[i][j] = distance(test_data[i], train_data[j], vec_size);
+        }
+    }
+
+    return distances;
+}
+
+
+
 template <class T>
 bool read_mat(const std::string &filename, Mat<T> &data)
 {
@@ -33,7 +133,7 @@ bool read_mat(const std::string &filename, Mat<T> &data)
     file.read((char*)&rows, sizeof(int));
     file.read((char*)&cols, sizeof(int));
 
-    data = make_mat<T>(rows, cols);
+    data = Mat<T>(rows, cols);
 
     T val;
     for (int i = 0; i < rows; i++)
@@ -64,7 +164,7 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
     file.read((char*)&rows, sizeof(int));
     file.read((char*)&cols, sizeof(int));
 
-    data = make_mat<T>(rows, cols);
+    data = Mat<T>(rows, cols);
     labels = std::vector<int>(rows);
 
     int label;
@@ -91,9 +191,9 @@ template <class T>
 bool write_mat(const std::string &filename, const Mat<T> &data)
 {
     int rows, cols = 0;
-    rows = data.size();
+    rows = data.rows;
     if (rows > 0)
-        cols = data[0].size();
+        cols = data[0].cols;
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat] Invalid data size:" << rows << ", " << cols << std::endl;
@@ -124,9 +224,9 @@ template <class T>
 bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std::vector<int> &labels)
 {
     int rows, cols = 0;
-    rows = data.size();
+    rows = data.rows;
     if (rows > 0)
-        cols = data[0].size();
+        cols = data[0].cols;
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat_labels] Invalid data size:" << rows << ", " << cols << std::endl;
@@ -229,8 +329,9 @@ std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(cons
 }
 
 
+
 template <class T>
-void from_indices(const std::vector<T> &data, const std::vector<int> &indices, std::vector<T> &output)
+void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, std::vector<T> &output)
 {
     int size = indices.size();
     output = std::vector<T>(size);
@@ -241,9 +342,22 @@ void from_indices(const std::vector<T> &data, const std::vector<int> &indices, s
     }
 }
 
+template <class T>
+void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &output)
+{
+    int size = indices.size();
+    output = Mat<T>(size, data.cols);
+
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < data.cols; j++)
+            output[i][j] = data[indices[i]][j];
+    }
+}
+
 
 // Compute Papa's accuracy 
-// Papa, João & Falcão, Alexandre & Suzuki, C.T.N.. (2009). Supervised Pattern Classification Based on Optimum-Path Forest. International Journal of Imaging Systems and Technology. 19. 120 - 131. 10.1002/ima.20188. 
+// Papa, João & Falcão, Alexandre & Suzuki, C.T.N.. (2009). Supervised Pattern Classification Based on Optimum-Path Forest. International Journal of Imaging Systems and Technology. 19. 120 - 131. 10.1002/ima.20188.
 float papa_accuracy(const std::vector<int> preds, const std::vector<int> ground_truth)
 {
     if (ground_truth.size() != preds.size())
@@ -259,8 +373,8 @@ float papa_accuracy(const std::vector<int> preds, const std::vector<int> ground_
     for (int i = 0; i < rows; i++)
         class_occ[ground_truth[i]]++;
 
-    Mat<float> errors = std::vector<std::vector<float>>(nlabels+1, std::vector<float>(2, 0));
-
+    Mat<float> errors(nlabels+1, 2, 0);
+ 
     for (int i = 0; i < rows; i++)
     {
         if (ground_truth[i] != preds[i])

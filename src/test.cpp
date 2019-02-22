@@ -6,6 +6,7 @@
 #include <fstream>
 #include <random>
 #include <set>
+#include <memory>
 
 #include <sys/time.h>
 #include <ctime>
@@ -14,10 +15,10 @@
 
 
 #include "libopfcpp/OPF.hpp"
-#include "libopfcpp/util.hpp"
 
 using namespace std;
 using namespace opf;
+
 
 
 int main(int argc, char *argv[])
@@ -41,11 +42,11 @@ int main(int argc, char *argv[])
         Mat<float> train_data, test_data;
         vector<int> train_labels, ground_truth;
 
-        from_indices<vector<float>>(data, splits.first, train_data);
-        from_indices<vector<float>>(data, splits.second, test_data);
+        index_by_list<float>(data, splits.first, train_data);
+        index_by_list<float>(data, splits.second, test_data);
 
-        from_indices<int>(labels, splits.first, train_labels);
-        from_indices<int>(labels, splits.second, ground_truth);
+        index_by_list<int>(labels, splits.first, train_labels);
+        index_by_list<int>(labels, splits.second, ground_truth);
 
         // Train clasifier
         SupervisedOPF<float> opf;
