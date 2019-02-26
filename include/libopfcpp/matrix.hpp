@@ -62,6 +62,7 @@ public:
     Mat(int rows, int cols);
     Mat(int rows, int cols, T val);
     Mat(std::shared_ptr<T>& data, int rows, int cols);
+    Mat(T* data, int rows, int cols);
 
     T* row(int i);
     T& at(int i, int j);
@@ -124,6 +125,15 @@ Mat<T>::Mat(std::shared_ptr<T>& data, int rows, int cols)
     this->cols = cols;
     this->size = rows * cols;
     this->data = data;
+}
+
+template <class T>
+Mat<T>::Mat(T* data, int rows, int cols)
+{
+    this->rows = rows;
+    this->cols = cols;
+    this->size = rows * cols;
+    this->data = std::shared_ptr<T>(data, [](T *p) {});
 }
 
 template <class T>
