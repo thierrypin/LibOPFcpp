@@ -121,7 +121,7 @@ int main()
 
     // And print accuracy
     float acc = opf::accuracy(test_labels, preds); // in util.hpp
-    cout << "Accuracy: " << acc*100 << "%%" << endl;
+    cout << "Accuracy: " << acc*100 << "%" << endl;
 }
 
 ```
