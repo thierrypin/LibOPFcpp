@@ -10,6 +10,7 @@
 
 
 #include "libopfcpp/OPF.hpp"
+#include "libopfcpp/util.hpp"
 
 using namespace std;
 using namespace opf;
@@ -17,15 +18,16 @@ using namespace opf;
 
 typedef timeval timer;
 #define TIMING_START() timer TM_start, TM_now, TM_now1;\
-  gettimeofday(&TM_start,NULL);\
-  TM_now = TM_start;
+    gettimeofday(&TM_start,NULL);\
+    TM_now = TM_start;
 #define SECTION_START(M, ftime) gettimeofday(&TM_now,NULL);\
-  fprintf(ftime,"================================================\nStarting to measure %s\n",M);
-#define TIMING_SECTION(M, ftime) gettimeofday(&TM_now1,NULL);\
-  fprintf(ftime,"%.3fms:\tSECTION %s\n",(TM_now1.tv_sec-TM_now.tv_sec)*1000.0 + (TM_now1.tv_usec-TM_now.tv_usec)*0.001,M);\
-  TM_now=TM_now1;
+    fprintf(ftime,"================================================\nStarting to measure %s\n",M);
+#define TIMING_SECTION(M, ftime, measurement) gettimeofday(&TM_now1,NULL);\
+    *measurement=(TM_now1.tv_sec-TM_now.tv_sec)*1000.0 + (TM_now1.tv_usec-TM_now.tv_usec)*0.001;\
+    fprintf(ftime,"%.3fms:\tSECTION %s\n",*measurement,M);\
+    TM_now=TM_now1;
 #define TIMING_END(ftime) gettimeofday(&TM_now1,NULL);\
-  fprintf(ftime,"\nTotal time: %.3fs\n================================================\n",\
+    fprintf(ftime,"\nTotal time: %.3fs\n================================================\n",\
       	 (TM_now1.tv_sec-TM_start.tv_sec) + (TM_now1.tv_usec-TM_start.tv_usec)*0.000001);
 
 
@@ -34,11 +36,15 @@ typedef timeval timer;
 int main(int argc, char *argv[])
 {
 
-    vector<string> datasets = {"data/iris.dat", "data/digits.dat", "data/olivetti_faces.dat", "data/wine.dat"};
+    vector<string> datasets = {"data/iris.dat", "data/digits.dat", "data/olivetti_faces.dat", "data/wine.dat", "data/mnist_test.dat"};
     TIMING_START();
 
-    for (string dataset : datasets)
+    vector<vector<float>> times(5, vector<float>(datasets.size()));
+    float measurement;
+
+    for (unsigned int i = 0; i < datasets.size(); i++)
     {
+        string dataset = datasets[i];
         Mat<float> data;
         vector<int> labels;
 
@@ -47,13 +53,13 @@ int main(int argc, char *argv[])
 
         // Split
         SECTION_START(dataset.c_str(), outchannel);
-        fprintf(outchannel, "Data size %d x %d\n\n", data.rows, data.cols);
+        fprintf(outchannel, "Data size %lu x %lu\n\n", data.rows, data.cols);
 
         fprintf(outchannel, "Preparing data\n");
         StratifiedShuffleSplit sss(0.5);
         pair<vector<int>, vector<int>> splits = sss.split(labels);
 
-        TIMING_SECTION("data split", outchannel);
+        TIMING_SECTION("data split", outchannel, &measurement);
 
         Mat<float> train_data, test_data;
         vector<int> train_labels, ground_truth;
@@ -64,7 +70,7 @@ int main(int argc, char *argv[])
         index_by_list<int>(labels, splits.first, train_labels);
         index_by_list<int>(labels, splits.second, ground_truth);
 
-        TIMING_SECTION("indexing", outchannel);
+        TIMING_SECTION("indexing", outchannel, &measurement);
 
 
         // *********** Training time ***********
@@ -74,12 +80,14 @@ int main(int argc, char *argv[])
         SupervisedOPF<float> opf;
         opf.fit(train_data, train_labels);
 
-        TIMING_SECTION("OPF training", outchannel);
+        TIMING_SECTION("OPF training", outchannel, &measurement);
+        times[0][i] = measurement;
         
         // And predict test data
         vector<int> preds = opf.predict(test_data);
 
-        TIMING_SECTION("OPF testing", outchannel);
+        TIMING_SECTION("OPF testing", outchannel, &measurement);
+        times[1][i] = measurement;
         
         // Measure accuracy
         float acc = accuracy(ground_truth, preds);
@@ -94,19 +102,22 @@ int main(int argc, char *argv[])
         fprintf(outchannel, "\nRunning OPF with precomputed values...\n");
 
         Mat<float> precomp_train_data = compute_train_distances<float>(train_data);
-        Mat<float> precomp_test_data = compute_test_distances<float>(train_data, test_data);
-        TIMING_SECTION("Precompute train and test data", outchannel);
+        Mat<float> precomp_test_data = compute_test_distances<float>(test_data, train_data);
+        TIMING_SECTION("Precompute train and test data", outchannel, &measurement);
+        times[2][i] = measurement;
 
         // Train clasifier
         SupervisedOPF<float> opf_precomp(true);
         opf_precomp.fit(precomp_train_data, train_labels);
 
-        TIMING_SECTION("OPF precomputed training", outchannel);
+        TIMING_SECTION("OPF precomputed training", outchannel, &measurement);
+        times[3][i] = measurement;
         
         // And predict test data
         preds = opf_precomp.predict(precomp_test_data);
 
-        TIMING_SECTION("OPF precomputed testing", outchannel);
+        TIMING_SECTION("OPF precomputed testing", outchannel, &measurement);
+        times[4][i] = measurement;
         
         // Measure accuracy
         acc = accuracy(ground_truth, preds);
@@ -118,6 +129,17 @@ int main(int argc, char *argv[])
 
         cout << "================================================\n" << endl;
     }
+
+    FILE *f;
+    f = fopen("timing.txt", "a");
+    for (size_t i = 0; i < datasets.size(); i++)
+        fprintf(f, "%s;%.3f;%.3f;%.3f;%.3f;%.3f\n", datasets[i].c_str(), times[0][i], times[1][i], times[2][i], times[3][i], times[4][i]);
+    fclose(f);
+
+    f = fopen("training.txt", "a");
+    for (size_t i = 0; i < datasets.size(); i++)
+        fprintf(f, "%s;%.3f\n", datasets[i].c_str(), times[0][i]);
+    fclose(f);
 
     TIMING_END(outchannel);
 

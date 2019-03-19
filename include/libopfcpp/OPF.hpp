@@ -23,14 +23,14 @@
 #ifndef MST_HPP
 #define MST_HPP
 
-#include <vector>
-#include <map>
-#include <limits>
+#include <functional>
 #include <algorithm>
+#include <limits>
+#include <memory>
+#include <vector>
 #include <cmath>
+#include <map>
 
-#include "libopfcpp/matrix.hpp"
-#include "libopfcpp/util.hpp"
 
 namespace opf
 {
@@ -38,6 +38,163 @@ namespace opf
 #define INF std::numeric_limits<float>::infinity()
 #define NIL -1
 
+// Generic distance function
+template <class T>
+using distance_function = std::function<T (const T*, const T*, size_t)>;
+
+// Default distance function
+template <class T>
+T euclidean_distance(const T* a, const T* b, size_t size)
+{
+    T sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        sum += (a[i]-b[i]) * (a[i]-b[i]);
+    }
+    return (T)sqrt(sum);
+}
+
+/*****************************************/
+/************** Matrix type **************/
+/*****************************************/
+template <class T=float>
+class Mat
+{
+private:
+    std::shared_ptr<T> data;
+public:
+    size_t rows, cols;
+    size_t size;
+    Mat();
+    Mat(Mat<T>& other);
+    Mat(const Mat<T>& other);
+    Mat(size_t rows, size_t cols);
+    Mat(size_t rows, size_t cols, T val);
+    Mat(std::shared_ptr<T>& data, size_t rows, size_t cols);
+    Mat(T* data, size_t rows, size_t cols);
+
+    T* row(size_t i);
+    T& at(size_t i, size_t j);
+    T* operator[](size_t i);
+    const T* operator[](size_t i) const;
+    Mat<T>& operator=(const Mat<T>& other);
+    Mat<T> copy();
+};
+
+template <class T>
+Mat<T>::Mat()
+{
+    this->rows = this->cols = this-> size = 0;
+}
+
+template <class T>
+Mat<T>::Mat(Mat<T>& other)
+{
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->size = other.size;
+    this->data = other.data;
+}
+
+template <class T>
+Mat<T>::Mat(const Mat<T>& other)
+{
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->size = other.size;
+    this->data = other.data;
+}
+
+template <class T>
+Mat<T>::Mat(size_t rows, size_t cols)
+{
+    this->rows = rows;
+    this->cols = cols;
+    this->size = rows * cols;
+    this->data = std::shared_ptr<T>(new T[this->size], std::default_delete<T[]>());
+}
+
+template <class T>
+Mat<T>::Mat(size_t rows, size_t cols, T val)
+{
+    this->rows = rows;
+    this->cols = cols;
+    this->size = rows * cols;
+    this->data = std::shared_ptr<T>(new T[this->size], std::default_delete<T[]>());
+
+    for (size_t i = 0; i < rows; i++)
+        for (size_t j = 0; j < cols; j++)
+            this->at(i, j) = val;
+}
+
+template <class T>
+Mat<T>::Mat(std::shared_ptr<T>& data, size_t rows, size_t cols)
+{
+    this->rows = rows;
+    this->cols = cols;
+    this->size = rows * cols;
+    this->data = data;
+}
+
+// Receives a pointer to some data, which may not be deleted.
+template <class T>
+Mat<T>::Mat(T* data, size_t rows, size_t cols)
+{
+    this->rows = rows;
+    this->cols = cols;
+    this->size = rows * cols;
+    this->data = std::shared_ptr<T>(data, [](T *p) {});
+}
+
+template <class T>
+T* Mat<T>::row(size_t i)
+{
+    size_t idx = i * this->cols;
+    return &this->data.get()[idx];
+}
+
+template <class T>
+T& Mat<T>::at(size_t i, size_t j)
+{
+    size_t idx = i * this->cols + j;
+    return this->data.get()[idx];
+}
+
+template <class T>
+T* Mat<T>::operator[](size_t i)
+{
+    size_t idx = i * this->cols;
+    return &this->data.get()[idx];
+}
+
+template <class T>
+const T* Mat<T>::operator[](size_t i) const
+{
+    size_t idx = i * this->cols;
+    return &this->data.get()[idx];
+}
+
+template <class T>
+Mat<T>& Mat<T>::operator=(const Mat<T>& other)
+{
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->size = other.size;
+    this->data = other.data;
+
+    return *this;
+}
+
+template <class T>
+Mat<T> Mat<T>::copy()
+{
+    Mat<T> out(this->rows, this->cols);
+    for (size_t i = 0; i < this->rows; i++)
+        for (size_t j = 0; j < this->cols; j++)
+            out[i][j] = this->data[i][j];
+}
+
+/*****************************************/
 
 /*****************************************/
 /************ Data structures ************/
@@ -69,8 +226,8 @@ public:
 	float cost;        // Cost to reach the node
 	int true_label;    // Ground truth
 	int label;         // Assigned label
-	int index;         // Index on the list -- makes searches easier
-	int pred;          // predecessor node
+	size_t index;      // Index on the list -- makes searches easier
+	int pred;       // predecessor node
 	Color color;       // Color on the heap. white: never visiter, gray: on the heap, black: removed from the heap
 	bool is_prototype; // Whether the node is a prototype
 };
@@ -123,6 +280,26 @@ public:
 		// Note that black items can not be inserted into the heap
 	}
 
+	// Update item's cost without updating the heap
+	void update_cost(int item, float cost)
+	{
+		// Update node's cost value
+		(*this->nodes)[item].cost = cost;
+		if ((*this->nodes)[item].color == WHITE)
+		{
+			(*this->nodes)[item].color = GRAY;
+			this->vec.push_back(&(*this->nodes)[item]);
+		}
+	}
+
+	// Update the heap.
+	// This is used after multiple calls to update_cost in order to reduce the number of calls to make_heap.
+	void heapify()
+	{
+		make_heap(this->vec.begin(), this->vec.end(), compare_element); // Remake the heap
+	}
+
+	// Remove and return the first element of the heap
 	int pop()
 	{
 		// Obtain and mark the first element
@@ -161,7 +338,7 @@ private:
 	// Model
 	Mat<T> train_data; // Training data (original vectors or distance matrix)
 	std::vector<Node> nodes; // Learned model
-	std::vector<int> ordered_nodes; // List of nodes ordered by cost. Useful for speeding up classification
+	std::vector<size_t> ordered_nodes; // List of nodes ordered by cost. Useful for speeding up classification
 
 	// Options
 	bool precomputed;
@@ -201,7 +378,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 	while(!h.empty())
 	{
 		// Gets the head of the heap and marks it black
-		int s = h.pop();
+		size_t s = h.pop();
 
 		// Prototype definition
 		int pred = this->nodes[s].pred;
@@ -218,6 +395,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 		
 
 		// Edge selection
+		#pragma omp parallel for default(shared)
 		for (size_t t = 0; t < this->nodes.size(); t++)
 		{
 			// If nodes are different and t has not been poped out of the heap (marked black)
@@ -233,11 +411,14 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 				// Assign if smaller than current value
 				if (weight < this->nodes[t].cost)
 				{
-					this->nodes[t].pred = s;
-					h.push(t, weight);
+					this->nodes[t].pred = static_cast<int>(s);
+					#pragma omp critical(updateHeap)
+					// h.push(t, weight);
+					h.update_cost(t, weight);
 				}
 			}
 		}
+		h.heapify();
 	}
 }
 
@@ -255,7 +436,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 template <class T>
 void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &labels)
 {
-	if (train_data.rows != labels.size())
+	if ((size_t)train_data.rows != labels.size())
 	{
 		std::cerr << "[OPF/fit] Error: data size does not match labels size: " << train_data.rows << " x " << labels.size() << std::endl;
 		exit(1);
@@ -276,13 +457,13 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 		{
 			node.pred = NIL;
 			node.cost = 0;
-			h.push(node.index, node.cost);
 		}
 		else // Other nodes start with cost = INF
 		{
 			node.cost = INF;
 		}
-		
+		// Since all nodes are connected to all the others
+		h.push(node.index, node.cost);
 	}
 
 	// List of nodes ordered by cost
@@ -292,10 +473,11 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 	// Consume the queue
 	while(!h.empty())
 	{
-		int s = h.pop();
+		size_t s = (size_t)h.pop();
 		this->ordered_nodes.push_back(s);
 
 		// Iterate over all neighbors
+		#pragma omp parallel for default(shared)
 		for (size_t t = 0; t < this->nodes.size(); t++)
 		{
 			if (s != t && this->nodes[s].cost < this->nodes[t].cost) // && this->nodes[t].color != BLACK ??
@@ -312,10 +494,13 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 				{
 					this->nodes[t].pred = s;
 					this->nodes[t].label = this->nodes[s].true_label;
-					h.push(t, cost);
+					// #pragma omp critical(updateHeap)
+					// h.push(t, cost);
+					h.update_cost(t, cost);
 				}
 			}
 		}
+		h.heapify();
 	}
 }
 
@@ -334,23 +519,24 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 template <class T>
 std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 {
-	int n_test_samples = test_data.rows;
-	int n_train_samples = this->nodes.size();
+	size_t n_test_samples = test_data.rows;
+	size_t n_train_samples = this->nodes.size();
 
 	// Output predictions
 	std::vector<int> predictions(n_test_samples);
 
-	for (int i = 0; i < n_test_samples; i++)
+	#pragma omp parallel for default(shared)
+	for (size_t i = 0; i < n_test_samples; i++)
 	{
 		
-		int idx = this->ordered_nodes[0];
-		int min_idx;
+		size_t idx = this->ordered_nodes[0];
+		size_t min_idx;
 		T min_cost = INF;
 		T weight = 0;
 
 		// 'ordered_nodes' contains sample indices ordered by cost, so if the current
 		// best connection costs less than the next node, it is useless to keep looking.
-		for (int j = 0; j < n_train_samples && min_cost > this->nodes[idx].cost; j++)
+		for (size_t j = 0; j < n_train_samples && min_cost > this->nodes[idx].cost; j++)
 		{
 			// Get the next node in the ordered list
 			idx = this->ordered_nodes[j];

@@ -2,8 +2,6 @@
 #ifndef UTIL_HPP
 #define UTIL_HPP
 
-#include "libopfcpp/matrix.hpp"
-
 #include <algorithm>
 #include <iostream>
 #include <fstream>
@@ -15,6 +13,10 @@
 #include <set>
 
 #include <cmath>
+
+#include "libopfcpp/OPF.hpp"
+
+
 
 namespace opf
 {
@@ -32,7 +34,7 @@ void print_vector(T* v, int size)
 template <class T>
 void print_matrix(Mat<T> m)
 {
-    for (int i = 0; i < m.size(); i++)
+    for (int i = 0; i < m.rows; i++)
     {
         T* row = m.row(i);
         print_vector(row, m.cols);
@@ -42,36 +44,21 @@ void print_matrix(Mat<T> m)
 }
 
 template <class T>
-using distance_function = std::function<T (const T*, const T*, int)>;
-
-
-template <class T>
-T euclidean_distance(const T* a, const T* b, int size)
+T magnitude(const T* v, size_t size)
 {
     T sum = 0;
     for (size_t i = 0; i < size; i++)
     {
-        sum += pow(a[i]-b[i], 2);
+        sum += v[i] * v[i];
     }
     return (T)sqrt(sum);
 }
 
 template <class T>
-T magnitude(const T* v, int size)
-{
-    T sum = 0;
-    for (int i = 0; i < size; i++)
-    {
-        sum += pow(v[i], 2);
-    }
-    return (T)sqrt(sum);
-}
-
-template <class T>
-T cosine_distance(const T* a, const T* b, int size)
+T cosine_distance(const T* a, const T* b, size_t size)
 {
     T dividend = 0;
-    for (int i = 0; i < size; i++)
+    for (size_t i = 0; i < size; i++)
     {
         dividend += a[i] * b[i];
     }
@@ -86,12 +73,13 @@ template <class T>
 Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(features.rows, features.rows);
-    for (int i = 0; i < features.rows; i++)
+    for (size_t i = 0; i < features.rows; i++)
         distances[i][i] = 0;
 
-    for (int i = 0; i < features.rows - 1; i++)
+    #pragma omp parallel for shared(features, distances)
+    for (size_t i = 0; i < features.rows - 1; i++)
     {
-        for (int j = i + 1; j < features.rows; j++)
+        for (size_t j = i + 1; j < features.rows; j++)
         {
             distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
         }
@@ -101,14 +89,15 @@ Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> dist
 }
 
 template <class T>
-Mat<float> compute_test_distances(const Mat<T> &train_data, const Mat<T> &test_data, distance_function<T> distance=euclidean_distance<T>)
+Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_data, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(test_data.rows, train_data.rows);
     int vec_size = train_data.cols;
 
-    for (int i = 0; i < distances.rows; i++)
+    #pragma omp parallel for shared(train_data, test_data, distances)
+    for (size_t i = 0; i < distances.rows; i++)
     {
-        for (int j = 0; j < distances.cols; j++)
+        for (size_t j = 0; j < distances.cols; j++)
         {
             distances[i][j] = distance(test_data[i], train_data[j], vec_size);
         }
@@ -298,7 +287,7 @@ std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(cons
 
     // Shuffle indices
     std::vector<int> idx(labels.size());
-    for (int i = 0; i < labels.size(); i++)
+    for (unsigned int i = 0; i < labels.size(); i++)
         idx[i] = i;
     
     std::shuffle(idx.begin(), idx.end(), this->random_engine);
@@ -306,7 +295,7 @@ std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(cons
     // Assign folds
     int j, l;
     int train_idx = 0, test_idx = 0;
-    for (int i = 0; i < labels.size(); i++)
+    for (unsigned int i = 0; i < labels.size(); i++)
     {
         j = idx[i];
         l = labels[j];
@@ -342,12 +331,12 @@ void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, 
 template <class T>
 void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &output)
 {
-    int size = indices.size();
+    size_t size = indices.size();
     output = Mat<T>(size, data.cols);
 
-    for (int i = 0; i < size; i++)
+    for (size_t i = 0; i < size; i++)
     {
-        for (int j = 0; j < data.cols; j++)
+        for (size_t j = 0; j < data.cols; j++)
             output[i][j] = data[indices[i]][j];
     }
 }
