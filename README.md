@@ -129,10 +129,17 @@ int main()
 Compile with:
 
 ```
-g++ src/test.cpp -std=c++1y -o test -Iinclude -O2 -Wall
+g++ samples/example.cpp -std=c++1y -o example -Iinclude
 ```
 
-Output (varies, since it is a random shuffle):
+Or run:
+
+```
+make example
+```
+
+
+Output varies, since it is a random shuffle:
 
 ```
 Accuracy: 98.5491%
