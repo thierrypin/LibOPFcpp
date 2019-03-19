@@ -1,5 +1,5 @@
 # LibOPFcpp
-C++ implementation of OPF classifier in one header
+C++17 implementation of OPF classifier in one header
 
 ## Usage
 
@@ -126,5 +126,16 @@ int main()
 
 ```
 
+Compile with:
+
+```
+g++ src/test.cpp -std=c++1y -o test -Iinclude -O2 -Wall
+```
+
+Output (varies, since it is a random shuffle):
+
+```
+Accuracy: 98.5491%
+```
 
 
