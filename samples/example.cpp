@@ -35,6 +35,7 @@ int main()
     // Read the data however you prefer
     // There are 
     opf::read_mat_labels("data/digits.dat", data, labels); // in util.hpp
+    cout << "Data shape: " << data.rows << ", " << data.cols << endl;
 
     opf::StratifiedShuffleSplit sss(0.5); // in util.hpp
     pair<vector<int>, vector<int>> splits = sss.split(labels);
@@ -45,13 +46,36 @@ int main()
     opf::index_by_list<int>(labels, splits.first, train_labels);
     opf::index_by_list<int>(labels, splits.second, test_labels);
 
+    /////////////////////////////////////////////
     // Fit and predict
     opf::SupervisedOPF<float> opf;
     opf.fit(train_data, train_labels);
     vector<int> preds = opf.predict(test_data);
+    /////////////////////////////////////////////
 
     // And print accuracy
-    float acc = opf::accuracy(test_labels, preds); // in util.hpp
-    cout << "Accuracy: " << acc*100 << "%" << endl;
+    float acc1 = opf::accuracy(test_labels, preds); // in util.hpp
+    cout << "Accuracy: " << acc1*100 << "%" << endl;
+
+    // Now test persistence
+    cout << "Write..." << endl;
+    opf.write("teste.dat");
+
+    cout << "Read..." << endl;
+    opf::SupervisedOPF<float> opf2;
+    opf::SupervisedOPF<float>::read("teste.dat", opf2);
+
+    // Predict again an check if accuracies are equal
+    preds = opf2.predict(test_data);
+    float acc2 = opf::accuracy(test_labels, preds); // in util.hpp
+    cout << "Accuracy: " << acc2*100 << "%" << endl;
+
+    if (acc1 == acc2)
+        cout << "Model persistence successful." << endl;
+    else
+        cout << "Model persistence failed." << endl;
+
+    return 0;
 }
+
 
