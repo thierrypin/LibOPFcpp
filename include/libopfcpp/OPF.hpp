@@ -25,6 +25,10 @@
 
 #include <functional>
 #include <algorithm>
+#include <typeinfo>
+#include <fstream>
+#include <cstring>
+#include <string>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -41,6 +45,8 @@ namespace opf
 // Generic distance function
 template <class T>
 using distance_function = std::function<T (const T*, const T*, size_t)>;
+
+using uchar = unsigned char;
 
 // Default distance function
 template <class T>
@@ -63,8 +69,8 @@ class Mat
 private:
     std::shared_ptr<T> data;
 public:
-    size_t rows, cols;
-    size_t size;
+    int rows, cols;
+    int size;
     Mat();
     Mat(Mat<T>& other);
     Mat(const Mat<T>& other);
@@ -123,8 +129,14 @@ Mat<T>::Mat(size_t rows, size_t cols, T val)
     this->data = std::shared_ptr<T>(new T[this->size], std::default_delete<T[]>());
 
     for (size_t i = 0; i < rows; i++)
+	{
+		T* row = this->row(i);
         for (size_t j = 0; j < cols; j++)
-            this->at(i, j) = val;
+            row[j] = val;
+	}
+	// for (size_t i = 0; i < rows; i++)
+    //     for (size_t j = 0; j < cols; j++)
+    //         this->at(i, j) = val;
 }
 
 template <class T>
@@ -331,6 +343,7 @@ public:
 /****************** OPF ******************/
 /*****************************************/
 
+
 template <class T=float>
 class SupervisedOPF // TODO: PIMPL
 {
@@ -338,7 +351,7 @@ private:
 	// Model
 	Mat<T> train_data; // Training data (original vectors or distance matrix)
 	std::vector<Node> nodes; // Learned model
-	std::vector<size_t> ordered_nodes; // List of nodes ordered by cost. Useful for speeding up classification
+	std::vector<int> ordered_nodes; // List of nodes ordered by cost. Useful for speeding up classification
 
 	// Options
 	bool precomputed;
@@ -352,6 +365,10 @@ public:
 	
 	void fit(const Mat<T> &train_data, const std::vector<int> &labels);
 	std::vector<int> predict(const Mat<T> &test_data);
+
+	// Serialization functions
+	bool write(std::string filename);
+	static bool read(std::string filename, SupervisedOPF<T> &opf);
 };
 
 template <class T>
@@ -473,12 +490,12 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 	// Consume the queue
 	while(!h.empty())
 	{
-		size_t s = (size_t)h.pop();
+		int s = h.pop();
 		this->ordered_nodes.push_back(s);
 
 		// Iterate over all neighbors
 		#pragma omp parallel for default(shared)
-		for (size_t t = 0; t < this->nodes.size(); t++)
+		for (int t = 0; t < (int) this->nodes.size(); t++)
 		{
 			if (s != t && this->nodes[s].cost < this->nodes[t].cost) // && this->nodes[t].color != BLACK ??
 			{
@@ -519,24 +536,24 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 template <class T>
 std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 {
-	size_t n_test_samples = test_data.rows;
-	size_t n_train_samples = this->nodes.size();
+	int n_test_samples = (int) test_data.rows;
+	int n_train_samples = (int) this->nodes.size();
 
 	// Output predictions
 	std::vector<int> predictions(n_test_samples);
 
 	#pragma omp parallel for default(shared)
-	for (size_t i = 0; i < n_test_samples; i++)
+	for (int i = 0; i < n_test_samples; i++)
 	{
 		
-		size_t idx = this->ordered_nodes[0];
-		size_t min_idx;
+		int idx = this->ordered_nodes[0];
+		int min_idx = 0;
 		T min_cost = INF;
 		T weight = 0;
 
 		// 'ordered_nodes' contains sample indices ordered by cost, so if the current
 		// best connection costs less than the next node, it is useless to keep looking.
-		for (size_t j = 0; j < n_train_samples && min_cost > this->nodes[idx].cost; j++)
+		for (int j = 0; j < n_train_samples && min_cost > this->nodes[idx].cost; j++)
 		{
 			// Get the next node in the ordered list
 			idx = this->ordered_nodes[j];
@@ -561,6 +578,106 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 	}
 	
 	return predictions;
+}
+
+/*****************************************/
+/*              Persistence              */
+
+
+template <class T>
+bool SupervisedOPF<T>::write(std::string filename)
+{
+	// Open file
+	std::ofstream output(filename, std::ios::out | std::ios::binary);
+	if (!output.is_open())
+	{
+		std::cerr << "Could not open file: " << filename << std::endl;
+		return false;
+	}
+
+	int n_samples = this->train_data.rows;
+	int n_features = this->train_data.cols;
+
+	// Header
+	output.write("OPF", 3*sizeof(char));
+	output.write((char*) &n_samples, sizeof(int));
+	output.write((char*) &n_features, sizeof(int));
+	if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+		
+
+	// Data
+	int size = this->train_data.size;
+	T* data = this->train_data.row(0);
+	output.write((char*) data, size * sizeof(T));
+	if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+
+	// Nodes
+	for (int i = 0; i < n_samples; i++)
+	{
+		output.write((char*) &this->nodes[i].cost, sizeof(float));
+		output.write((char*) &this->nodes[i].label, sizeof(int));
+
+		if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+	}
+
+	// Ordered_nodes
+
+	output.write((char*) this->ordered_nodes.data(), n_samples*sizeof(int));
+	if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+
+	return true;
+}
+
+template <class T>
+bool SupervisedOPF<T>::read(std::string filename, SupervisedOPF<T> &opf)
+{
+	opf = SupervisedOPF<float>();
+
+	// Open file	
+	std::ifstream output(filename, std::ios::in | std::ios::binary);
+	if (!output.is_open())
+	{
+		std::cerr << "Could not open file: " << filename << std::endl;
+		return false;
+	}
+
+	// Header
+	int n_samples;
+	int n_features;
+
+	char header[4];
+	output.read(header, 3*sizeof(char));
+	header[3] = '\0';
+	if (strcmp(header, "OPF"))
+	{std::cerr << "Input is not an OPF file: " << filename << std::endl; return false;}
+
+	output.read((char*) &n_samples, sizeof(int));
+	output.read((char*) &n_features, sizeof(int));
+	if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+
+	// Data
+	int size = n_samples * n_features;
+	opf.train_data = Mat<T>(n_samples, n_features);
+	T* data = opf.train_data.row(0);
+	output.read((char*) data, size * sizeof(T));
+	if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+
+	// Nodes
+	opf.nodes = std::vector<Node>(n_samples);
+	for (int i = 0; i < n_samples; i++)
+	{
+		output.read((char*) &opf.nodes[i].cost, sizeof(float));
+		output.read((char*) &opf.nodes[i].label, sizeof(int));
+
+		if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+	}
+
+	// Ordered_nodes
+	opf.ordered_nodes = std::vector<int>(n_samples);
+	output.read((char*) opf.ordered_nodes.data(), n_samples*sizeof(int));
+	if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+
+	return true;
 }
 
 /*****************************************/
