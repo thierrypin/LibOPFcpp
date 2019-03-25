@@ -353,12 +353,12 @@ void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, 
 template <class T>
 void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &output)
 {
-    size_t size = indices.size();
+    int size = (int) indices.size();
     output = Mat<T>(size, data.cols);
 
-    for (size_t i = 0; i < size; i++)
+    for (int i = 0; i < size; i++)
     {
-        for (size_t j = 0; j < data.cols; j++)
+        for (int j = 0; j < data.cols; j++)
             output[i][j] = data[indices[i]][j];
     }
 }
