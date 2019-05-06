@@ -1,6 +1,34 @@
 # LibOPFcpp
 C++17 implementation of OPF classifier in one header
 
+## How to cite
+
+The algorithm is described in:
+
+J. P. Papa, A. X. Falcão, and Celso T. N. Suzuki. Supervised pattern classification based on optimum-path forest.  International Journal of Imaging Systems and Technology, 19(2):120-131, 2009.
+
+Bibtex:
+```bibtex
+@article{papa2009,
+ author = {Papa, J. P. and Falc\~{a}o, A. X. and Suzuki, C. T. N.},
+ title = {Supervised Pattern Classification Based on Optimum-path Forest},
+ journal = {International Journal of Imaging Systems and Technology},
+ issue_date = {June 2009},
+ volume = {19},
+ number = {2},
+ month = jun,
+ year = {2009},
+ issn = {0899-9457},
+ pages = {120--131},
+ numpages = {12},
+ doi = {10.1002/ima.v19:2},
+ publisher = {John Wiley \& Sons, Inc.},
+ address = {New York, NY, USA},
+ keywords = {graph-search algorithms, image analysis, image foresting transform, pattern recognition, supervised learning},
+}
+```
+
+
 ## Usage
 
 The library was designed to look like scikit-learn. The main class is called OPFClassifier, and it contains one constructor and two functions:
