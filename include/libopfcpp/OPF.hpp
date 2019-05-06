@@ -457,8 +457,8 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 				if (weight < this->nodes[t].cost)
 				{
 					this->nodes[t].pred = static_cast<int>(s);
-					#pragma omp critical(updateHeap)
 					// h.push(t, weight);
+					#pragma omp critical(updateHeap)
 					h.update_cost(t, weight);
 				}
 			}
@@ -539,8 +539,8 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 				{
 					this->nodes[t].pred = s;
 					this->nodes[t].label = this->nodes[s].true_label;
-					// #pragma omp critical(updateHeap)
 					// h.push(t, cost);
+					#pragma omp critical(updateHeap)
 					h.update_cost(t, cost);
 				}
 			}
