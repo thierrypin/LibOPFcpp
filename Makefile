@@ -1,14 +1,14 @@
 
 
 test:
-	clang++ samples/test.cpp -std=c++1y -o test -Iinclude -O2
+	clang++ samples/test.cpp -std=c++1y -o test -Iinclude -O2 -Wall
 
 
 openmp:
-	clang++ samples/test.cpp -std=c++1y -o test -Iinclude -O2 -fopenmp -Wall
+	clang++ samples/test.cpp -std=c++1y -o test_parallel -Iinclude -O2 -fopenmp -Wall
 
 
-example:
-	clang++ samples/example.cpp -std=c++1y -o example -Iinclude -O2 -fopenmp
+persistence:
+	clang++ samples/persistence_test.cpp -std=c++1y -o persistence -Iinclude -O2 -fopenmp -Wall
 
 

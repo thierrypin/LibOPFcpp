@@ -27,6 +27,10 @@
 
 using namespace std;
 
+/**
+ * This example trains a model, computes its accuracy and saves the model into a file.
+ * Then it loads the file and computes its accuracy again.
+ */
 int main()
 {
     opf::Mat<float> data, train_data, test_data;

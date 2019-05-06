@@ -56,9 +56,14 @@ typedef timeval timer;
 
 #define outchannel stdout
 
+
+/**
+ * This example trains and tests the model in five datasets.
+ * For each dataset, we compute testing accuracy and execution time for the regular usage
+ * and using precomputed distance matrices.
+ */
 int main(int argc, char *argv[])
 {
-
     vector<string> datasets = {"data/iris.dat", "data/digits.dat", "data/olivetti_faces.dat", "data/wine.dat", "data/mnist_test.dat"};
     TIMING_START();
 
@@ -76,7 +81,7 @@ int main(int argc, char *argv[])
 
         // Split
         SECTION_START(dataset.c_str(), outchannel);
-        fprintf(outchannel, "Data size %lu x %lu\n\n", data.rows, data.cols);
+        fprintf(outchannel, "Data size %d x %d\n\n", data.rows, data.cols);
 
         fprintf(outchannel, "Preparing data\n");
         StratifiedShuffleSplit sss(0.5);
