@@ -66,32 +66,6 @@ void print_matrix(Mat<T> m)
 }
 
 template <class T>
-T magnitude(const T* v, size_t size)
-{
-    T sum = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        sum += v[i] * v[i];
-    }
-    return (T)sqrt(sum);
-}
-
-template <class T>
-T cosine_distance(const T* a, const T* b, size_t size)
-{
-    T dividend = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        dividend += a[i] * b[i];
-    }
-
-    T divisor = magnitude<T>(a, size) * magnitude<T>(b, size);
-
-    // 1 - cosine similarity
-    return 1 - (dividend / divisor);
-}
-
-template <class T>
 Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(features.rows, features.rows);
@@ -127,8 +101,6 @@ Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_d
 
     return distances;
 }
-
-
 
 template <class T>
 bool read_mat(const std::string &filename, Mat<T> &data)
@@ -335,8 +307,6 @@ std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(cons
 
     return splits;
 }
-
-
 
 template <class T>
 void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, std::vector<T> &output)

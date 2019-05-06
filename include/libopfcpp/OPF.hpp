@@ -60,6 +60,33 @@ T euclidean_distance(const T* a, const T* b, size_t size)
     return (T)sqrt(sum);
 }
 
+template <class T>
+T magnitude(const T* v, size_t size)
+{
+    T sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        sum += v[i] * v[i];
+    }
+    return (T)sqrt(sum);
+}
+
+// One alternate distance function
+template <class T>
+T cosine_distance(const T* a, const T* b, size_t size)
+{
+    T dividend = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        dividend += a[i] * b[i];
+    }
+
+    T divisor = magnitude<T>(a, size) * magnitude<T>(b, size);
+
+    // 1 - cosine similarity
+    return 1 - (dividend / divisor);
+}
+
 /*****************************************/
 /************** Matrix type **************/
 /*****************************************/
@@ -239,7 +266,7 @@ public:
 	int true_label;    // Ground truth
 	int label;         // Assigned label
 	size_t index;      // Index on the list -- makes searches easier
-	int pred;       // predecessor node
+	int pred;          // predecessor node
 	Color color;       // Color on the heap. white: never visiter, gray: on the heap, black: removed from the heap
 	bool is_prototype; // Whether the node is a prototype
 };
