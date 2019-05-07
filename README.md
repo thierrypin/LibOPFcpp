@@ -179,15 +179,15 @@ Accuracy: 98.5491%
 
 ## OPF in the literature
 
-```
+`
 João Paulo Papa, Silas Evandro Nachif Fernandes, and Alexandre Xavier Falcão. 2017. Optimum-Path Forest based on k-connectivity. Pattern Recognition Letters, 87 (February 2017), 117-126.
-```
+`
 
-```
+`
 Leonardo Marques Rocha, Fábio A. M. Cappabianco, and Alexandre Xavier Falcão. 2009. Data clustering as an optimum-path forest problem with applications in image analysis. Int J. International Journal of Imaging Systems and Technology. 19, 2 (June 2009), 50-68.
-```
+`
 
-```
+`
 João P. Papa, Alexandre X. Falcão, Victor Hugo C. de Albuquerque, João Manuel R.S. Tavares. Efficient supervised optimum-path forest classification for large datasets. Pattern Recognition, Volume 45, Issue 1, (2012), 512-520.
-```
+`
 
