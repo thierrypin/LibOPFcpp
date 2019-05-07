@@ -8,7 +8,7 @@ The algorithm is described in:
 J. P. Papa, A. X. Falcão, and Celso T. N. Suzuki. Supervised pattern classification based on optimum-path forest.  International Journal of Imaging Systems and Technology, 19(2):120-131, 2009.
 
 Bibtex:
-```bibtex
+```latex
 @article{papa2009,
  author = {Papa, J. P. and Falc\~{a}o, A. X. and Suzuki, C. T. N.},
  title = {Supervised Pattern Classification Based on Optimum-path Forest},
@@ -34,7 +34,9 @@ Bibtex:
 The library was designed to look like scikit-learn. The main class is called OPFClassifier, and it contains one constructor and two functions:
 
 ### Constructor
-`SupervisedOPF(bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);`
+```cpp
+SupervisedOPF(bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
+```
 
 Inputs:
 precomputed: true if it will receive precomputed distance matrices. False otherwise.
@@ -43,7 +45,9 @@ distance: distance function, case precomputed == false.
 
 ### Functions
 
-`void fit(const Mat<T> &train_data, const std::vector<int> &labels);`
+```cpp
+void fit(const Mat<T> &train_data, const std::vector<int> &labels);
+```
 
 Fits the classifier.
 
@@ -70,7 +74,7 @@ The class `Mat<T>` was heavily inspired by OpenCV's `Mat`, although it is not ne
 
 Its constructors include:
 
-```
+```cpp
 Mat();
 Mat(Mat<T>& other);
 Mat(const Mat<T>& other);
@@ -83,7 +87,7 @@ Mat(T* data, size_t rows, size_t cols);
 
 To access data and general assignment, the following functions:
 
-```
+```cpp
 // access a row's content, similar to OpenCV's m.ptr<T>(i)
 T* row(size_t i);
 
@@ -107,7 +111,7 @@ Mat<T> copy();
 
 The library works in a scikit-learn manner:
 
-```
+```cpp
 opf::SupervisedOPF<float> opf;
 opf.fit(train_data, train_labels);
 preds = opf.predict(test_data);
@@ -116,7 +120,7 @@ preds = opf.predict(test_data);
 
 The following example uses a dataset contained in **data/**. Note that most of the code is preamble, declaration, data reading and pre-processing.
 
-```
+```cpp
 #include <iostream>
 
 #include "libopfcpp/OPF.hpp"
@@ -156,7 +160,7 @@ int main()
 
 Compile with:
 
-```
+```bash
 g++ samples/example.cpp -std=c++1y -o example -Iinclude
 ```
 
