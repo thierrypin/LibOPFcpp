@@ -121,7 +121,7 @@ bool read_mat(const std::string &filename, Mat<T> &data)
 
     T val;
     for (int i = 0; i < rows; i++)
-    {   
+    {
         for (int j = 0; j < cols; j++)
         {
             file.read((char*)&val, sizeof(T));
@@ -336,7 +336,7 @@ void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &
 
 // Compute Papa's accuracy 
 // Papa, João & Falcão, Alexandre & Suzuki, C.T.N.. (2009). Supervised Pattern Classification Based on Optimum-Path Forest. International Journal of Imaging Systems and Technology. 19. 120 - 131. 10.1002/ima.20188.
-float papa_accuracy(const std::vector<int> preds, const std::vector<int> ground_truth)
+float papa_accuracy(const std::vector<int> &preds, const std::vector<int> &ground_truth)
 {
     if (ground_truth.size() != preds.size())
     {
@@ -387,14 +387,14 @@ float papa_accuracy(const std::vector<int> preds, const std::vector<int> ground_
     return 1. - (error / (2.0 * nlabels));;
 }
 
-float accuracy(const std::vector<int> ground_truth, const std::vector<int> preds)
+float accuracy(const std::vector<int> &ground_truth, const std::vector<int> &preds)
 {
     if (ground_truth.size() != preds.size())
     {
         std::cerr << "[util/accuracy] Error: ground truth and prediction sizes do not match. " << ground_truth.size() << " x " << preds.size() << std::endl;
     }
-
-    int n = ground_truth.size();
+    
+    float n = static_cast<float>(ground_truth.size());
     float acc = 0;
     for (int i = 0; i < n; i++)
         if (ground_truth[i] == preds[i])

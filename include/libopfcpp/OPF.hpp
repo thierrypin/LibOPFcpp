@@ -610,6 +610,7 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 
 /*****************************************/
 /*              Persistence              */
+/*****************************************/
 
 
 template <class T>
