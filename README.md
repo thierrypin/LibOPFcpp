@@ -1,5 +1,5 @@
 # LibOPFcpp
-C++17 implementation of OPF classifier in one header
+C++17 implementation of OPF classifier in one header. For a Python binding, check [PyOPF](https://github.com/marcoscleison/PyOPF).
 
 ## How to cite
 
