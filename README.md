@@ -105,6 +105,9 @@ Mat<T>& operator=(const Mat<T>& other);
 
 // copies matrix contents
 Mat<T> copy();
+
+// releases content (subtracts the reference counter)
+void release();
 ```
 
 ### Example usage

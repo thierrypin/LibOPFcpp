@@ -66,25 +66,6 @@ void print_matrix(Mat<T> m)
 }
 
 template <class T>
-Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
-{
-    Mat<float> distances(features.rows, features.rows);
-    for (size_t i = 0; i < features.rows; i++)
-        distances[i][i] = 0;
-
-    #pragma omp parallel for shared(features, distances)
-    for (size_t i = 0; i < features.rows - 1; i++)
-    {
-        for (size_t j = i + 1; j < features.rows; j++)
-        {
-            distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
-        }
-    }
-
-    return distances;
-}
-
-template <class T>
 Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_data, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(test_data.rows, train_data.rows);

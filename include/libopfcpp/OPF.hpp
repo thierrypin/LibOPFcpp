@@ -28,14 +28,15 @@
 #include <typeinfo>
 #include <fstream>
 #include <cstring>
+#include <utility>
 #include <string>
 #include <limits>
 #include <memory>
 #include <vector>
 #include <cmath>
 #include <map>
+#include <set>
 #include <omp.h>
-
 
 namespace opf
 {
@@ -47,46 +48,6 @@ namespace opf
 template <class T>
 using distance_function = std::function<T (const T*, const T*, size_t)>;
 
-using uchar = unsigned char;
-
-// Default distance function
-template <class T>
-T euclidean_distance(const T* a, const T* b, size_t size)
-{
-    T sum = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        sum += (a[i]-b[i]) * (a[i]-b[i]);
-    }
-    return (T)sqrt(sum);
-}
-
-template <class T>
-T magnitude(const T* v, size_t size)
-{
-    T sum = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        sum += v[i] * v[i];
-    }
-    return (T)sqrt(sum);
-}
-
-// One alternate distance function
-template <class T>
-T cosine_distance(const T* a, const T* b, size_t size)
-{
-    T dividend = 0;
-    for (size_t i = 0; i < size; i++)
-    {
-        dividend += a[i] * b[i];
-    }
-
-    T divisor = magnitude<T>(a, size) * magnitude<T>(b, size);
-
-    // 1 - cosine similarity
-    return 1 - (dividend / divisor);
-}
 
 /*****************************************/
 /************** Matrix type **************/
@@ -113,6 +74,8 @@ public:
     const T* operator[](size_t i) const;
     Mat<T>& operator=(const Mat<T>& other);
     Mat<T> copy();
+
+	void release();
 };
 
 template <class T>
@@ -234,7 +197,74 @@ Mat<T> Mat<T>::copy()
             out[i][j] = this->data[i][j];
 }
 
+template <class T>
+void Mat<T>::release()
+{
+    this->data.reset();
+}
+
 /*****************************************/
+
+
+// Default distance function
+template <class T>
+T euclidean_distance(const T* a, const T* b, size_t size)
+{
+    T sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        sum += (a[i]-b[i]) * (a[i]-b[i]);
+    }
+    return (T)sqrt(sum);
+}
+
+template <class T>
+T magnitude(const T* v, size_t size)
+{
+    T sum = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        sum += v[i] * v[i];
+    }
+    return (T)sqrt(sum);
+}
+
+// One alternate distance function
+template <class T>
+T cosine_distance(const T* a, const T* b, size_t size)
+{
+    T dividend = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        dividend += a[i] * b[i];
+    }
+
+    T divisor = magnitude<T>(a, size) * magnitude<T>(b, size);
+
+    // 1 - cosine similarity
+    return 1 - (dividend / divisor);
+}
+
+template <class T>
+Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
+{
+    Mat<float> distances(features.rows, features.rows);
+    for (size_t i = 0; i < features.rows; i++)
+        distances[i][i] = 0;
+
+    #pragma omp parallel for shared(features, distances)
+    for (size_t i = 0; i < features.rows - 1; i++)
+    {
+        for (size_t j = i + 1; j < features.rows; j++)
+        {
+            distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
+        }
+    }
+
+	// Can I employ std::move here?
+    return distances;
+}
+
 
 /*****************************************/
 /************ Data structures ************/
@@ -263,13 +293,13 @@ public:
 		this->is_prototype = false;
 	}
 	
+	size_t index;      // Index on the list -- makes searches easier *
+	Color color;       // Color on the heap. white: never visiter, gray: on the heap, black: removed from the heap *
 	float cost;        // Cost to reach the node
-	int true_label;    // Ground truth
+	int true_label;    // Ground truth *
 	int label;         // Assigned label
-	size_t index;      // Index on the list -- makes searches easier
-	int pred;          // predecessor node
-	Color color;       // Color on the heap. white: never visiter, gray: on the heap, black: removed from the heap
-	bool is_prototype; // Whether the node is a prototype
+	int pred;          // Predecessor node *
+	bool is_prototype; // Whether the node is a prototype *
 };
 
 /**
@@ -371,9 +401,9 @@ public:
 /****************** OPF ******************/
 /*****************************************/
 
-
+/******** Supervised ********/
 template <class T=float>
-class SupervisedOPF // TODO: PIMPL
+class SupervisedOPF
 {
 private:
 	// Model
@@ -573,7 +603,6 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 	#pragma omp parallel for default(shared)
 	for (int i = 0; i < n_test_samples; i++)
 	{
-		
 		int idx = this->ordered_nodes[0];
 		int min_idx = 0;
 		T min_cost = INF;
@@ -710,6 +739,389 @@ bool SupervisedOPF<T>::read(std::string filename, SupervisedOPF<T> &opf)
 }
 
 /*****************************************/
+
+/******** Unsupervised ********/
+
+// Index + distance to another node
+using Pdist = std::pair<int, float>;
+
+static bool compare_neighbor(const Pdist& lhs, const Pdist& rhs)
+{
+	return lhs.second < rhs.second;
+}
+
+// Aux class to find the k nearest neighbors from a given node
+// In the future, this should be replaced by a kdtree
+class BestK
+{
+private:
+	int k;
+	std::vector<Pdist> heap; // idx, dist
+
+public:
+	// Empty initializer
+	BestK(int k) : k(k) {this->heap.reserve(k);}
+	// Tries to insert another element to the heap
+	void insert(int idx, float dist)
+	{
+		if (heap.size() < this->k)
+		{
+			heap.push_back(Pdist(idx, dist));
+			push_heap(this->heap.begin(), this->heap.end(), compare_neighbor);
+		}
+		else
+		{
+			// If the new point is closer than the farthest neighbor
+			Pdist farthest = this->heap.front();
+			if (dist < farthest.second)
+			{
+				// Remove one from the heap and add the other
+				pop_heap(this->heap.begin(), this->heap.end(), compare_neighbor);
+				this->heap[this->k-1] = Pdist(idx, dist);
+				push_heap(this->heap.begin(), this->heap.end(), compare_neighbor);
+			}
+		}
+	}
+
+	std::vector<Pdist>& get_knn() { return heap; }
+};
+
+
+/**
+ * Plain class to store node information
+ */
+class NodeKNN
+{
+public:
+	NodeKNN()
+	{
+		this->pred = -1;
+	}
+	
+	std::set<Pdist> adj; // Node adjacency
+	size_t index;        // Index on the list -- makes searches easier
+	int label;           // Assigned label
+	int pred;            // Predecessor node
+	float value;         // Path value
+	float rho;           // probability density function
+};
+
+// Unsupervised OPF classifier
+template <class T=float>
+class UnsupervisedOPF
+{
+private:
+	// Model
+	Mat<T> train_data;          // Training data (original vectors or distance matrix)
+	Mat<T> distances;           // Precomputed feature distances
+	std::vector<NodeKNN> nodes; // Learned model
+	std::vector<int> queue;     // Priority queue implemented as a linear search in a vector
+	int k;                      // The number of neighbors to build the graph
+	float sigma_sq;             // Sigma squared, used to compute probability distribution function
+	float delta;                // Adjustment term
+	float denominator;          // sqrt(2 * math.pi * sigma_sq) -- compute it only once
+
+	// Options
+	bool precomputed;
+	distance_function<T> distance;
+
+	// Queue capabilities
+	int get_max();
+	void build_graph();
+	void build_initialize();
+	void cluster();
+
+public:
+	UnsupervisedOPF(int k, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
+	
+	void fit(const Mat<T> &train_data);
+	std::vector<int> fit_predict(const Mat<T> &train_data);
+	std::vector<int> predict(const Mat<T> &test_data);
+
+	// Clustering info
+	float quality_metric();
+	int n_clusters;
+
+	// Serialization functions
+	// bool write(std::string filename);
+	// static bool read(std::string filename, UnsupervisedOPF<T> &opf);
+};
+
+template <class T>
+UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool precomputed, distance_function<T> distance)
+{
+	this->k = k;
+	this->precomputed = precomputed;
+	this->distance = distance;
+}
+
+// Builds the KNN graph
+template <class T>
+void UnsupervisedOPF<T>::build_graph()
+{
+	// Proportional to the length of the biggest edge
+	for (int i = 0; i < this->nodes.size(); i++)
+	{
+		// Find the k nearest neighbors
+		BestK bk(this->k);
+		for (int j = 0; j < this->nodes.size(); j++)
+		{
+			if (i != j)
+			{
+				float dist;
+				if (this->precomputed)
+					dist = this->distances[i][j];
+				else
+					dist = this->distance(this->train_data[i], this->train_data[j], this->train_data.cols);
+				
+				bk.insert(j, dist);
+			}
+		}
+
+		this->sigma_sq = 0.;
+		std::vector<Pdist> knn = bk.get_knn();
+		for (auto it = knn.cbegin(); it != knn.cend(); ++it)
+		{
+			// Since the graph is undirected, make connections from both nodes
+			this->nodes[i].adj.insert(*it);
+			this->nodes[it->first].adj.insert(Pdist(i, it->second));
+
+			// Finding sigma
+			if (it->second > this->sigma_sq)
+				this->sigma_sq = it->second;
+		}
+	}
+	
+	this->sigma_sq /= 3;
+	this->sigma_sq = this->sigma_sq * this->sigma_sq;
+	this->denominator = sqrt(2 * M_PI * this->sigma_sq);
+}
+
+// Build and initialize the graph
+template <class T>
+void UnsupervisedOPF<T>::build_initialize()
+{
+	// Precompute during training to speed up the process?
+	// this->distances = compute_train_distances(this->train_data, this->distance);
+
+	this->build_graph();
+
+	// Compute rho
+	std::set<Pdist>::iterator it;
+	for (int i = 0; i < this->nodes.size(); i++)
+	{
+		int n_neighbors = this->nodes[i].adj.size(); // A node may have more than k neighbors
+		float div = this->denominator * n_neighbors;
+		float sum = 0;
+
+		for (it = this->nodes[i].adj.cbegin(); it != this->nodes[i].adj.cend(); ++it)
+		{
+			float dist = it->second; // this->distances[i][*it]
+			sum += expf((-dist * dist) / (2 * this->sigma_sq));
+		}
+
+		this->nodes[i].rho = sum / div;
+	}
+
+	// Compute delta
+	this->delta = INF;
+	for (int i = 0; i < this->nodes.size(); i++)
+	{
+		for (it = this->nodes[i].adj.begin(); it != this->nodes[i].adj.end(); ++it)
+		{
+			float diff = abs(this->nodes[i].rho - this->nodes[it->first].rho);
+			if (this->delta > diff)
+				this->delta = diff;
+		}
+	}
+
+	// And, finally, initialize each node
+	this->queue.resize(this->nodes.size());
+	for (int i = 0; i < this->nodes.size(); i++)
+	{
+		this->nodes[i].value = this->nodes[i].rho - this->delta;
+		this->queue[i] = i;
+	}
+}
+
+// Get the node with the biggest path value
+template <class T>
+int UnsupervisedOPF<T>::get_max()
+{
+	float maxval = -INF;
+	int maxidx = -1;
+	int size = this->queue.size();
+	for (int i = 0; i < size; i++)
+	{
+		int idx = this->queue[i];
+		if (this->nodes[idx].value > maxval)
+		{
+			maxidx = i;
+			maxval = this->nodes[idx].value;
+		}
+	}
+
+	int best = this->queue[maxidx];
+	int tmp = this->queue[size-1];
+	this->queue[size-1] = this->queue[maxidx];
+	this->queue[maxidx] = tmp;
+	this->queue.pop_back();
+
+	return best;
+}
+
+// OPF clustering
+template <class T>
+void UnsupervisedOPF<T>::cluster()
+{
+	// Cluster labels
+	int l = 0;
+	// Priority queue
+	while (!this->queue.empty())
+	{
+		int s = this->get_max(); // Pop the highest value
+
+		// If it has no predecessor, make it a prototype
+		if (this->nodes[s].pred == -1)
+		{
+			this->nodes[s].label = l++;
+			this->nodes[s].value = this->nodes[s].rho;
+		}
+
+		// Iterate and conquer over its neighbors
+		for (auto it = this->nodes[s].adj.begin(); it != this->nodes[s].adj.end(); ++it)
+		{
+			int t = it->first;
+			if (this->nodes[t].value < this->nodes[s].value)
+			{
+				float tmp = std::min(this->nodes[s].value, this->nodes[t].rho);
+				if (tmp > this->nodes[t].value)
+				{
+					this->nodes[t].label = this->nodes[s].label;
+					this->nodes[t].pred = s;
+					this->nodes[t].value = tmp;
+				}
+			}
+		}
+	}
+
+	this->n_clusters = l;
+}
+
+
+// Fit the model
+template <class T>
+void UnsupervisedOPF<T>::fit(const Mat<T> &train_data)
+{
+	this->train_data = train_data; //TODO passar por referência?
+	this->nodes = std::vector<NodeKNN>(this->train_data.rows);
+	this->build_initialize();
+	this->cluster();
+}
+
+// Fit and predict for all nodes
+template <class T>
+std::vector<int> UnsupervisedOPF<T>::fit_predict(const Mat<T> &train_data)
+{
+	this->fit(train_data);
+
+	std::vector<int> labels(this->nodes.size());
+	for (int i = 0; i < this->nodes.size(); i++)
+		labels[i] = this->nodes[i].label;
+	
+	return labels;
+}
+
+// Predict cluster pertinence
+template <class T>
+std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
+{
+	std::vector<int> preds(test_data.rows);
+	// For each test sample
+	for (int i = 0; i < test_data.rows; i++)
+	{
+		// Find the k nearest neighbors
+		BestK bk(this->k);
+		for (int j = 0; j < this->nodes.size(); j++)
+		{
+			if (i != j)
+			{
+				float dist;
+				if (this->precomputed)
+					dist = test_data[i][j];
+				else
+					dist = this->distance(test_data[i], this->train_data[j], this->train_data.cols);
+				
+				bk.insert(j, dist);
+			}
+		}
+
+		// Compute the testing rho
+		std::vector<Pdist> neighbors = bk.get_knn();
+		int n_neighbors = neighbors.size();
+
+		float div = this->denominator * n_neighbors;
+		float sum = 0;
+
+		for (int j = 0; j < n_neighbors; j++)
+		{
+			float dist = neighbors[j].second; // this->distances[i][*it]
+			sum += expf((-dist * dist) / (2 * this->sigma_sq));
+		}
+
+		float rho = sum / div;
+
+		// And find which node conquers this test sample
+		float maxval = 0;
+		int maxidx = -1;
+		for (int j = 0; j < n_neighbors; j++)
+		{
+			int s = neighbors[j].first;
+			float val = std::min(this->nodes[s].value, rho);
+			if (val > maxval)
+			{
+				maxval = val;
+				maxidx = s;
+			}
+		}
+
+		preds[i] = this->nodes[maxidx].label;
+	}
+
+	return preds;
+}
+
+// Quality metric
+template <class T>
+float UnsupervisedOPF<T>::quality_metric()
+{
+	std::vector<float> w(this->n_clusters, 0);
+	std::vector<float> w_(this->n_clusters, 0);
+	for (int i = 0; i < this->train_data.rows; i++)
+	{
+		int l = this->nodes[i].label;
+
+		for (auto it = this->nodes[i].adj.begin(); it != this->nodes[i].adj.end(); ++it)
+		{
+			int l_ = this->nodes[it->first].label;
+			float tmp = 0;
+
+			if (it->second != 0)
+				tmp = 1. / it->second;
+
+			if (l == l_)
+				w[l] += tmp;
+			else
+				w_[l] += tmp;
+		}
+	}
+
+	float C = 0;
+	for (int i = 0; i < this->n_clusters; i++)
+		C += w_[i] / (w_[i] + w[i]);
+	
+	return C;
+}
 
 }
 
