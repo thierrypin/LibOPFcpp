@@ -761,7 +761,7 @@ public:
 	// Tries to insert another element to the heap
 	void insert(int idx, float dist)
 	{
-		if (heap.size() < this->k)
+		if (heap.size() < static_cast<unsigned int>(this->k))
 		{
 			heap.push_back(Pdist(idx, dist));
 			push_heap(this->heap.begin(), this->heap.end(), compare_neighbor);
@@ -829,7 +829,7 @@ private:
 	void cluster();
 
 public:
-	UnsupervisedOPF(int k, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
+	UnsupervisedOPF(int k=5, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
 	
 	void fit(const Mat<T> &train_data);
 	std::vector<int> fit_predict(const Mat<T> &train_data);
@@ -857,11 +857,11 @@ template <class T>
 void UnsupervisedOPF<T>::build_graph()
 {
 	// Proportional to the length of the biggest edge
-	for (int i = 0; i < this->nodes.size(); i++)
+	for (size_t i = 0; i < this->nodes.size(); i++)
 	{
 		// Find the k nearest neighbors
 		BestK bk(this->k);
-		for (int j = 0; j < this->nodes.size(); j++)
+		for (size_t j = 0; j < this->nodes.size(); j++)
 		{
 			if (i != j)
 			{
@@ -905,7 +905,7 @@ void UnsupervisedOPF<T>::build_initialize()
 
 	// Compute rho
 	std::set<Pdist>::iterator it;
-	for (int i = 0; i < this->nodes.size(); i++)
+	for (size_t i = 0; i < this->nodes.size(); i++)
 	{
 		int n_neighbors = this->nodes[i].adj.size(); // A node may have more than k neighbors
 		float div = this->denominator * n_neighbors;
@@ -922,7 +922,7 @@ void UnsupervisedOPF<T>::build_initialize()
 
 	// Compute delta
 	this->delta = INF;
-	for (int i = 0; i < this->nodes.size(); i++)
+	for (size_t i = 0; i < this->nodes.size(); i++)
 	{
 		for (it = this->nodes[i].adj.begin(); it != this->nodes[i].adj.end(); ++it)
 		{
@@ -934,10 +934,10 @@ void UnsupervisedOPF<T>::build_initialize()
 
 	// And, finally, initialize each node
 	this->queue.resize(this->nodes.size());
-	for (int i = 0; i < this->nodes.size(); i++)
+	for (size_t i = 0; i < this->nodes.size(); i++)
 	{
 		this->nodes[i].value = this->nodes[i].rho - this->delta;
-		this->queue[i] = i;
+		this->queue[i] = static_cast<int>(i);
 	}
 }
 
@@ -1023,7 +1023,7 @@ std::vector<int> UnsupervisedOPF<T>::fit_predict(const Mat<T> &train_data)
 	this->fit(train_data);
 
 	std::vector<int> labels(this->nodes.size());
-	for (int i = 0; i < this->nodes.size(); i++)
+	for (size_t i = 0; i < this->nodes.size(); i++)
 		labels[i] = this->nodes[i].label;
 	
 	return labels;
@@ -1039,7 +1039,7 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
 	{
 		// Find the k nearest neighbors
 		BestK bk(this->k);
-		for (int j = 0; j < this->nodes.size(); j++)
+		for (int j = 0; j < static_cast<int>(this->nodes.size()); j++)
 		{
 			if (i != j)
 			{

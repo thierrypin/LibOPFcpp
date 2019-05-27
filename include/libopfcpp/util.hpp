@@ -72,9 +72,9 @@ Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_d
     int vec_size = train_data.cols;
 
     #pragma omp parallel for shared(train_data, test_data, distances)
-    for (size_t i = 0; i < distances.rows; i++)
+    for (int i = 0; i < distances.rows; i++)
     {
-        for (size_t j = 0; j < distances.cols; j++)
+        for (int j = 0; j < distances.cols; j++)
         {
             distances[i][j] = distance(test_data[i], train_data[j], vec_size);
         }
