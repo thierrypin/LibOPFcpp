@@ -85,7 +85,7 @@ Mat(std::shared_ptr<T>& data, size_t rows, size_t cols);
 Mat(T* data, size_t rows, size_t cols);
 ```
 
-To access data and general assignment, the following functions:
+For general data access and manipulation, the following functions:
 
 ```cpp
 // access a row's content, similar to OpenCV's m.ptr<T>(i)
