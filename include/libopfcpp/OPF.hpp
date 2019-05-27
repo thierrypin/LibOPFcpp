@@ -20,8 +20,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MST_HPP
-#define MST_HPP
+#ifndef OPF_HPP
+#define OPF_HPP
 
 #include <functional>
 #include <algorithm>
@@ -125,9 +125,6 @@ Mat<T>::Mat(size_t rows, size_t cols, T val)
         for (size_t j = 0; j < cols; j++)
             row[j] = val;
 	}
-	// for (size_t i = 0; i < rows; i++)
-    //     for (size_t j = 0; j < cols; j++)
-    //         this->at(i, j) = val;
 }
 
 template <class T>
