@@ -246,12 +246,11 @@ template <class T>
 Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(features.rows, features.rows);
-    for (int i = 0; i < features.rows; i++)
-        distances[i][i] = 0;
 
     #pragma omp parallel for shared(features, distances)
     for (int i = 0; i < features.rows - 1; i++)
     {
+        distances[i][i] = 0;
         for (int j = i + 1; j < features.rows; j++)
         {
             distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
@@ -826,6 +825,8 @@ private:
 
     // Queue capabilities
     int get_max();
+
+    // Training subroutines
     void build_graph();
     void build_initialize();
     void cluster();
@@ -1126,46 +1127,7 @@ float UnsupervisedOPF<T>::quality_metric()
     return C;
 }
 
-// template <class T>
-// UnsupervisedOPF<float> UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step, bool precomputed, distance_function<T> distance)
-// {
-//     float best_quality = INF;
-//     // int best_k = 1;
-//     // int n_clusters;
-//     // std::vector<NodeKNN> best_model;
-//     UnsupervisedOPF<float> best_opf;
-//     Mat<float> distances = compute_train_distances(train_data);
-
-//     for (int k = 2; k <= kmax; k += step)
-//     {
-//         std::cout << "==== " << k << ": ";
-//         // Instanciate and train the model
-//         UnsupervisedOPF<float> opf(k, true, distance);
-//         opf.fit(distances);
-       
-//         // Compare its clustering grade
-//         float quality = opf.quality_metric();
-//         if (quality < best_quality)
-//         {
-//             best_quality = quality;
-//             // best_k = k;
-//             // best_model = opf.nodes;
-//             // n_clusters = opf.n_clusters;
-//             best_opf = opf;
-//         }
-
-//         std::cout << quality << " ====" << std::endl;
-//     }
-
-//     if (!precomputed)
-//     {
-//         best_opf.precomputed = precomputed;
-//         best_opf.train_data = train_data;
-//     }
-    
-//     return best_opf;
-// }
-
+// Brute force method to find the best value of k
 template <class T>
 void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step)
 {
@@ -1181,13 +1143,10 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
         opf.fit(distances);
        
         // Compare its clustering grade
-        float quality = opf.quality_metric();
+        float quality = opf.quality_metric(); // Normalized cut
         if (quality < best_quality)
         {
             best_quality = quality;
-            // best_k = k;
-            // best_model = opf.nodes;
-            // n_clusters = opf.n_clusters;
             best_opf = opf;
         }
 
@@ -1202,6 +1161,9 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     this->k = best_opf.k;
     this->n_clusters = best_opf.n_clusters;
     this->nodes = best_opf.nodes;
+    this->denominator = best_opf.denominator;
+    this->sigma_sq = best_opf.sigma_sq;
+    this->delta = best_opf.delta;
 }
 
 
