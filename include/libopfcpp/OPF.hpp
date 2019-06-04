@@ -882,7 +882,7 @@ class UnsupervisedOPF
 {
 private:
     // Model
-    const Mat<T> *train_data;          // Training data (original vectors or distance matrix)
+    const Mat<T> *train_data;   // Training data (original vectors or distance matrix)
     std::vector<NodeKNN> nodes; // Learned model
     std::vector<int> queue;     // Priority queue implemented as a linear search in a vector
     int k;                      // The number of neighbors to build the graph
@@ -1206,19 +1206,23 @@ float UnsupervisedOPF<T>::quality_metric()
 
 // Brute force method to find the best value of k
 template <class T>
-void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step)
+void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step, bool precompute=true)
 {
     float best_quality = INF;
     UnsupervisedOPF<float> best_opf;
-    DistMat<float> distances(train_data, this->distance);
+    if (precompute)
+        DistMat<float> distances(train_data, this->distance);
     // Mat<float> distances = compute_train_distances(train_data, this->distance);
 
     for (int k = kmin; k <= kmax; k += step)
     {
         std::cout << "==== " << k << ": ";
         // Instanciate and train the model
-        UnsupervisedOPF<float> opf(k, true, distance);
-        opf.fit(distances);
+        UnsupervisedOPF<float> opf(k, precompute, this->distance);
+        if (precompute)
+            opf.fit(distances);
+        else
+            opf.fit(train_data);
        
         // Compare its clustering grade
         float quality = opf.quality_metric(); // Normalized cut
