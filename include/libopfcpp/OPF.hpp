@@ -55,21 +55,22 @@ using distance_function = std::function<T (const T*, const T*, size_t)>;
 template <class T=float>
 class Mat
 {
-private:
+protected:
     std::shared_ptr<T> data;
 public:
     int rows, cols;
     int size;
     Mat();
-    Mat(Mat<T>& other);
     Mat(const Mat<T>& other);
     Mat(size_t rows, size_t cols);
     Mat(size_t rows, size_t cols, T val);
     Mat(std::shared_ptr<T>& data, size_t rows, size_t cols);
     Mat(T* data, size_t rows, size_t cols);
 
+    virtual T& at(size_t i, size_t j);
+    const virtual T at(size_t i, size_t j) const;
     T* row(size_t i);
-    T& at(size_t i, size_t j);
+    const T* row(size_t i) const;
     T* operator[](size_t i);
     const T* operator[](size_t i) const;
     Mat<T>& operator=(const Mat<T>& other);
@@ -82,15 +83,6 @@ template <class T>
 Mat<T>::Mat()
 {
     this->rows = this->cols = this-> size = 0;
-}
-
-template <class T>
-Mat<T>::Mat(Mat<T>& other)
-{
-    this->rows = other.rows;
-    this->cols = other.cols;
-    this->size = other.size;
-    this->data = other.data;
 }
 
 template <class T>
@@ -147,6 +139,20 @@ Mat<T>::Mat(T* data, size_t rows, size_t cols)
 }
 
 template <class T>
+T& Mat<T>::at(size_t i, size_t j)
+{
+    size_t idx = i * this->cols + j;
+    return this->data.get()[idx];
+}
+
+template <class T>
+const T Mat<T>::at(size_t i, size_t j) const
+{
+    size_t idx = i * this->cols + j;
+    return this->data.get()[idx];
+}
+
+template <class T>
 T* Mat<T>::row(size_t i)
 {
     size_t idx = i * this->cols;
@@ -154,10 +160,10 @@ T* Mat<T>::row(size_t i)
 }
 
 template <class T>
-T& Mat<T>::at(size_t i, size_t j)
+const T* Mat<T>::row(size_t i) const
 {
-    size_t idx = i * this->cols + j;
-    return this->data.get()[idx];
+    size_t idx = i * this->cols;
+    return &this->data.get()[idx];
 }
 
 template <class T>
@@ -257,8 +263,76 @@ Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> dist
         }
     }
 
-    // Can I employ std::move here?
     return distances;
+}
+
+
+/*****************************************/
+/********* Distance matrix type **********/
+/*****************************************/
+// Instead of storing n x n elements, we only store the upper triangle,
+// which has (n * (n-1))/2 elements (less than half).
+template <class T>
+class DistMat: public Mat<T>
+{
+private:
+    T diag_vals = static_cast<T>(0);
+    int get_index(int i, int j) const;
+public:
+    DistMat(const DistMat& other);
+    DistMat(const Mat<T>& features, distance_function<T> distance=euclidean_distance<T>);
+    virtual T& at(size_t i, size_t j);
+    const virtual T at(size_t i, size_t j) const;
+};
+
+// The first row has n-1 cols, the second has n-2, and so on until row n has 0 cols.
+// This way, 
+#define SWAP(a, b) (((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b)))
+template <class T>
+inline int DistMat<T>::get_index(int i, int j) const
+{
+    if (i > j)
+        SWAP(i, j);
+    return ((((this->rows<<1) - i - 1) * i) >> 1) + (j - i - 1);
+}
+
+template <class T>
+DistMat<T>::DistMat(const DistMat& other)
+{
+    this->rows = other.rows;
+    this->cols = other.cols;
+    this->size = other.size;
+    this->data = other.data;
+}
+
+template <class T>
+DistMat<T>::DistMat(const Mat<T>& features, distance_function<T> distance)
+{
+    this->rows = features.rows;
+    this->cols = features.rows;
+    this->size = (this->rows * (this->rows - 1)) / 2;
+    this->data = std::shared_ptr<T>(new float[this->size], std::default_delete<float[]>());
+    for (int i = 0; i < this->rows; i++)
+    {
+        for (int j = i+1; j < this->rows; j++)
+            this->data.get()[get_index(i, j)] = distance(features[i], features[j], features.cols);
+    }
+}
+
+template <class T>
+T& DistMat<T>::at(size_t i, size_t j)
+{
+    if (i == j)
+        return this->diag_vals = static_cast<T>(0);
+    return this->data.get()[this->get_index(i, j)];
+}
+
+template <class T>
+const T DistMat<T>::at(size_t i, size_t j) const
+{
+    if (i == j)
+        return 0;
+    return this->data.get()[this->get_index(i, j)];
 }
 
 
@@ -808,7 +882,7 @@ class UnsupervisedOPF
 {
 private:
     // Model
-    Mat<T> train_data;          // Training data (original vectors or distance matrix)
+    const Mat<T> *train_data;          // Training data (original vectors or distance matrix)
     std::vector<NodeKNN> nodes; // Learned model
     std::vector<int> queue;     // Priority queue implemented as a linear search in a vector
     int k;                      // The number of neighbors to build the graph
@@ -837,6 +911,7 @@ public:
     void fit(const Mat<T> &train_data);
     std::vector<int> fit_predict(const Mat<T> &train_data);
     std::vector<int> predict(const Mat<T> &test_data);
+
     void find_best_k(Mat<float>& train_data, int kmin, int kmax, int step=1);
 
     // Clustering info
@@ -874,9 +949,11 @@ void UnsupervisedOPF<T>::build_graph()
             {
                 float dist;
                 if (this->precomputed)
-                    dist = this->train_data[i][j];
+                {
+                    dist = this->train_data->at(i, j);
+                }
                 else
-                    dist = this->distance(this->train_data[i], this->train_data[j], this->train_data.cols);
+                    dist = this->distance(this->train_data->row(i), this->train_data->row(j), this->train_data->cols);
                 
                 bk.insert(j, dist);
             }
@@ -1017,8 +1094,8 @@ void UnsupervisedOPF<T>::cluster()
 template <class T>
 void UnsupervisedOPF<T>::fit(const Mat<T> &train_data)
 {
-    this->train_data = train_data; //TODO passar por referência?
-    this->nodes = std::vector<NodeKNN>(this->train_data.rows);
+    this->train_data = &train_data; //TODO passar por referência?
+    this->nodes = std::vector<NodeKNN>(this->train_data->rows);
     this->build_initialize();
     this->cluster();
 }
@@ -1052,9 +1129,9 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
             {
                 float dist;
                 if (this->precomputed)
-                    dist = test_data[i][j];
+                    dist = test_data.at(i, j);
                 else
-                    dist = this->distance(test_data[i], this->train_data[j], this->train_data.cols);
+                    dist = this->distance(test_data[i], this->train_data->row(j), this->train_data->cols);
                 
                 bk.insert(j, dist);
             }
@@ -1101,7 +1178,7 @@ float UnsupervisedOPF<T>::quality_metric()
 {
     std::vector<float> w(this->n_clusters, 0);
     std::vector<float> w_(this->n_clusters, 0);
-    for (int i = 0; i < this->train_data.rows; i++)
+    for (int i = 0; i < this->train_data->rows; i++)
     {
         int l = this->nodes[i].label;
 
@@ -1133,7 +1210,8 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
 {
     float best_quality = INF;
     UnsupervisedOPF<float> best_opf;
-    Mat<float> distances = compute_train_distances(train_data);
+    DistMat<float> distances(train_data, this->distance);
+    // Mat<float> distances = compute_train_distances(train_data, this->distance);
 
     for (int k = kmin; k <= kmax; k += step)
     {
@@ -1154,9 +1232,9 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     }
 
     if (this->precomputed)
-        this->train_data = distances;
+        this->train_data = &distances;
     else
-        this->train_data = train_data;
+        this->train_data = &train_data;
 
     this->k = best_opf.k;
     this->n_clusters = best_opf.n_clusters;
