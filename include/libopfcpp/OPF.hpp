@@ -279,6 +279,7 @@ private:
     T diag_vals = static_cast<T>(0);
     int get_index(int i, int j) const;
 public:
+    DistMat(){this->rows = this->cols = this->size = 0;};
     DistMat(const DistMat& other);
     DistMat(const Mat<T>& features, distance_function<T> distance=euclidean_distance<T>);
     virtual T& at(size_t i, size_t j);
@@ -912,7 +913,7 @@ public:
     std::vector<int> fit_predict(const Mat<T> &train_data);
     std::vector<int> predict(const Mat<T> &test_data);
 
-    void find_best_k(Mat<float>& train_data, int kmin, int kmax, int step=1);
+    void find_best_k(Mat<float>& train_data, int kmin, int kmax, int step=1, bool precompute=true);
 
     // Clustering info
     float quality_metric();
@@ -1206,12 +1207,16 @@ float UnsupervisedOPF<T>::quality_metric()
 
 // Brute force method to find the best value of k
 template <class T>
-void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step, bool precompute=true)
+void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step, bool precompute)
 {
     float best_quality = INF;
     UnsupervisedOPF<float> best_opf;
+    DistMat<float> distances;
     if (precompute)
-        DistMat<float> distances(train_data, this->distance);
+    {
+        std::cout << "Precomputing dists" << std::endl;
+        distances = DistMat<float>(train_data, this->distance);
+    }
     // Mat<float> distances = compute_train_distances(train_data, this->distance);
 
     for (int k = kmin; k <= kmax; k += step)
