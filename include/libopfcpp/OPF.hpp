@@ -24,11 +24,12 @@
 #define OPF_HPP
 
 #include <functional>
+#include <stdexcept>
 #include <algorithm>
 #include <typeinfo>
-#include <fstream>
-#include <cstring>
+#include <sstream>
 #include <utility>
+#include <cstring>
 #include <string>
 #include <limits>
 #include <memory>
@@ -36,17 +37,68 @@
 #include <cmath>
 #include <map>
 #include <set>
+
 #include <omp.h>
 
 namespace opf
 {
 
+using uchar = unsigned char;
 #define INF std::numeric_limits<float>::infinity()
 #define NIL -1
 
 // Generic distance function
 template <class T>
 using distance_function = std::function<T (const T*, const T*, size_t)>;
+
+
+
+/*****************************************/
+/*************** Binary IO ***************/
+/*****************************************/
+
+////////////
+// OPF types
+enum Type : unsigned char
+{
+    Classifier = 1,
+    Clustering = 2,
+};
+
+//////////////////////
+// Serialization Flags
+enum SFlags : unsigned char
+{
+    SavePrototypes = 1,
+};
+
+///////////////
+// IO functions
+template <class T>
+void write_bin(std::ostream& output, const T& val)
+{
+    output.write((char*) &val, sizeof(T));
+}
+
+template <class T>
+void write_bin(std::ostream& output, const T* val, int n=1)
+{
+    output.write((char*) val, sizeof(T) * n);
+}
+
+template <class T>
+T read_bin(std::istream& input)
+{
+    T val;
+    input.read((char*) &val, sizeof(T));
+    return val;
+}
+
+template <class T>
+void read_bin(std::istream& input, T* val, int n=1)
+{
+    input.read((char*) val, sizeof(T) * n);
+}
 
 
 /*****************************************/
@@ -69,12 +121,12 @@ public:
 
     virtual T& at(size_t i, size_t j);
     const virtual T at(size_t i, size_t j) const;
-    T* row(size_t i);
-    const T* row(size_t i) const;
-    T* operator[](size_t i);
-    const T* operator[](size_t i) const;
+    virtual T* row(size_t i);
+    const virtual T* row(size_t i) const;
+    virtual T* operator[](size_t i);
+    const virtual T* operator[](size_t i) const;
     Mat<T>& operator=(const Mat<T>& other);
-    Mat<T> copy();
+    virtual Mat<T> copy();
 
     void release();
 };
@@ -197,7 +249,9 @@ Mat<T> Mat<T>::copy()
     Mat<T> out(this->rows, this->cols);
     for (size_t i = 0; i < this->rows; i++)
         for (size_t j = 0; j < this->cols; j++)
-            out[i][j] = this->data[i][j];
+            out[i][j] = this->at(i, j);
+    
+    return out;
 }
 
 template <class T>
@@ -496,8 +550,11 @@ public:
     std::vector<int> predict(const Mat<T> &test_data);
 
     // Serialization functions
-    bool write(std::string filename);
-    static bool read(std::string filename, SupervisedOPF<T> &opf);
+    std::string serialize(uchar flags=0);
+    static SupervisedOPF<T> unserialize(std::string& contents);
+
+    // Training information
+    std::vector<std::vector<float>> get_prototypes();
 };
 
 template <class T>
@@ -583,10 +640,8 @@ template <class T>
 void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &labels)
 {
     if ((size_t)train_data.rows != labels.size())
-    {
-        std::cerr << "[OPF/fit] Error: data size does not match labels size: " << train_data.rows << " x " << labels.size() << std::endl;
-        exit(1);
-    }
+        throw std::invalid_argument("[OPF/fit] Error: data size does not match labels size: " + std::to_string(train_data.rows) + " x " + std::to_string(labels.size()));
+
     // Store data reference for testing
     this->train_data = train_data;
 
@@ -712,101 +767,146 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 /*              Persistence              */
 /*****************************************/
 
-
 template <class T>
-bool SupervisedOPF<T>::write(std::string filename)
+std::string SupervisedOPF<T>::serialize(uchar flags)
 {
+    if (this->precomputed)
+        throw std::invalid_argument("Serialization for precomputed OPF not implemented yet");
     // Open file
-    std::ofstream output(filename, std::ios::out | std::ios::binary);
-    if (!output.is_open())
-    {
-        std::cerr << "Could not open file: " << filename << std::endl;
-        return false;
-    }
+    std::ostringstream output(std::ios::out | std::ios::binary);
 
     int n_samples = this->train_data.rows;
     int n_features = this->train_data.cols;
-
+    
     // Header
-    output.write("OPF", 3*sizeof(char));
-    output.write((char*) &n_samples, sizeof(int));
-    output.write((char*) &n_features, sizeof(int));
-    if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
-        
+    write_bin<char>(output, "OPF", 3);
+    write_bin<uchar>(output, Type::Classifier);
+    write_bin<uchar>(output, flags);
+    write_bin<uchar>(output, static_cast<uchar>(0)); // Reserved flags byte
+    write_bin<int>(output, n_samples);
+    write_bin<int>(output, n_features);
 
     // Data
     int size = this->train_data.size;
     T* data = this->train_data.row(0);
-    output.write((char*) data, size * sizeof(T));
-    if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+    write_bin<T>(output, data, size);
 
     // Nodes
     for (int i = 0; i < n_samples; i++)
     {
-        output.write((char*) &this->nodes[i].cost, sizeof(float));
-        output.write((char*) &this->nodes[i].label, sizeof(int));
-
-        if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+        write_bin<float>(output, this->nodes[i].cost);
+        write_bin<int>(output, this->nodes[i].label);
     }
 
     // Ordered_nodes
+    write_bin<int>(output, this->ordered_nodes.data(), n_samples);
 
-    output.write((char*) this->ordered_nodes.data(), n_samples*sizeof(int));
-    if(output.bad()) {std::cerr << "Error writing to file: " << filename << std::endl; return false;}
+    // Prototypes
+    if (flags & SFlags::SavePrototypes)
+    {
+        // Find which are prototypes first, because we need the correct amount
+        std::set<int> prots;
+        for (int i = 0; i < n_samples; i++)
+        {
+            if (this->nodes[i].is_prototype)
+                prots.insert(i);
+        }
 
-    return true;
+        write_bin<int>(output, prots.size());
+        for (auto it = prots.begin(); it != prots.end(); ++it)
+            write_bin<int>(output, *it);
+    }
+
+    return output.str();
 }
 
 template <class T>
-bool SupervisedOPF<T>::read(std::string filename, SupervisedOPF<T> &opf)
+SupervisedOPF<T> SupervisedOPF<T>::unserialize(std::string& contents)
 {
-    opf = SupervisedOPF<float>();
-
-    // Open file    
-    std::ifstream output(filename, std::ios::in | std::ios::binary);
-    if (!output.is_open())
-    {
-        std::cerr << "Could not open file: " << filename << std::endl;
-        return false;
-    }
-
     // Header
     int n_samples;
     int n_features;
 
     char header[4];
-    output.read(header, 3*sizeof(char));
+
+    SupervisedOPF<float> opf;
+
+    // Open stream
+    std::istringstream ifs(contents); // , std::ios::in | std::ios::binary
+
+    // Check if stream is an OPF serialization
+    read_bin<char>(ifs, header, 3);
     header[3] = '\0';
     if (strcmp(header, "OPF"))
-    {std::cerr << "Input is not an OPF file: " << filename << std::endl; return false;}
+        throw std::invalid_argument("Input is not an OPF serialization");
+    
+    // Get type and flags
+    uchar type = read_bin<uchar>(ifs);
+    uchar flags = read_bin<uchar>(ifs);
+    read_bin<uchar>(ifs); // Reserved byte
 
-    output.read((char*) &n_samples, sizeof(int));
-    output.read((char*) &n_features, sizeof(int));
-    if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+    if (type != Type::Classifier)
+        throw std::invalid_argument("Input is not a Supervised OPF serialization");
+
+    n_samples = read_bin<int>(ifs);
+    n_features = read_bin<int>(ifs);
 
     // Data
     int size = n_samples * n_features;
     opf.train_data = Mat<T>(n_samples, n_features);
     T* data = opf.train_data.row(0);
-    output.read((char*) data, size * sizeof(T));
-    if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+    read_bin<T>(ifs, data, size);
 
     // Nodes
     opf.nodes = std::vector<Node>(n_samples);
     for (int i = 0; i < n_samples; i++)
     {
-        output.read((char*) &opf.nodes[i].cost, sizeof(float));
-        output.read((char*) &opf.nodes[i].label, sizeof(int));
-
-        if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+        opf.nodes[i].cost = read_bin<float>(ifs);
+        opf.nodes[i].label = read_bin<int>(ifs);
     }
 
     // Ordered_nodes
     opf.ordered_nodes = std::vector<int>(n_samples);
-    output.read((char*) opf.ordered_nodes.data(), n_samples*sizeof(int));
-    if(output.bad()) {std::cerr << "Error reading file: " << filename << std::endl; return false;}
+    read_bin<int>(ifs, opf.ordered_nodes.data(), n_samples);
 
-    return true;
+    if (flags & SFlags::SavePrototypes)
+    {
+        int prots = read_bin<int>(ifs);
+        for (int i = 0; i < prots; i++)
+        {
+            int idx = read_bin<int>(ifs);
+            opf.nodes[idx].is_prototype = true;
+        }
+    }
+
+    return opf;
+}
+
+/*****************************************/
+/*              Data Access              */
+/*****************************************/
+
+template <class T>
+std::vector<std::vector<float>> SupervisedOPF<T>::get_prototypes()
+{
+    std::set<int> prots;
+    for (int i = 0; i < this->train_data.rows; i++)
+    {
+        if (this->nodes[i].is_prototype)
+            prots.insert(i);
+    }
+
+    std::vector<std::vector<float>> out(prots.size(), std::vector<float>(this->train_data.cols));
+    int i = 0;
+    for (auto it = prots.begin(); it != prots.end(); ++it, ++i)
+    {
+        for (int j = 0; j < this->train_data.cols; j++)
+        {
+            out[i][j] = this->train_data[*it][j];
+        }
+    }
+
+    return out;
 }
 
 /*****************************************/
@@ -883,7 +983,7 @@ class UnsupervisedOPF
 {
 private:
     // Model
-    const Mat<T> *train_data;   // Training data (original vectors or distance matrix)
+    std::shared_ptr<const Mat<T>> train_data;   // Training data (original vectors or distance matrix)
     std::vector<NodeKNN> nodes; // Learned model
     std::vector<int> queue;     // Priority queue implemented as a linear search in a vector
     int k;                      // The number of neighbors to build the graph
@@ -923,8 +1023,8 @@ public:
     int get_k() {return this->k;}
 
     // Serialization functions
-    // bool write(std::string filename);
-    // static bool read(std::string filename, UnsupervisedOPF<T> &opf);
+    std::string serialize(uchar flags=0);
+    static UnsupervisedOPF<T> unserialize(std::string& contents);
 };
 
 template <class T>
@@ -950,9 +1050,7 @@ void UnsupervisedOPF<T>::build_graph()
             {
                 float dist;
                 if (this->precomputed)
-                {
                     dist = this->train_data->at(i, j);
-                }
                 else
                     dist = this->distance(this->train_data->row(i), this->train_data->row(j), this->train_data->cols);
                 
@@ -984,8 +1082,6 @@ template <class T>
 void UnsupervisedOPF<T>::build_initialize()
 {
     // Precompute during training to speed up the process?
-    // this->distances = compute_train_distances(this->train_data, this->distance);
-
     this->build_graph();
 
     // Compute rho
@@ -1095,7 +1191,7 @@ void UnsupervisedOPF<T>::cluster()
 template <class T>
 void UnsupervisedOPF<T>::fit(const Mat<T> &train_data)
 {
-    this->train_data = &train_data; //TODO passar por referência?
+    this->train_data = std::shared_ptr<const Mat<T>>(&train_data, [](const Mat<T> *p) {});
     this->nodes = std::vector<NodeKNN>(this->train_data->rows);
     this->build_initialize();
     this->cluster();
@@ -1174,6 +1270,8 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
 }
 
 // Quality metric
+// From: A Robust Extension of the Mean Shift Algorithm using Optimum Path Forest
+// Leonardo Rocha, Alexandre Falcao, and Luis Meloni
 template <class T>
 float UnsupervisedOPF<T>::quality_metric()
 {
@@ -1213,15 +1311,10 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     UnsupervisedOPF<float> best_opf;
     DistMat<float> distances;
     if (precompute)
-    {
-        std::cout << "Precomputing dists" << std::endl;
         distances = DistMat<float>(train_data, this->distance);
-    }
-    // Mat<float> distances = compute_train_distances(train_data, this->distance);
 
     for (int k = kmin; k <= kmax; k += step)
     {
-        std::cout << "==== " << k << ": ";
         // Instanciate and train the model
         UnsupervisedOPF<float> opf(k, precompute, this->distance);
         if (precompute)
@@ -1237,13 +1330,12 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
             best_opf = opf;
         }
 
-        std::cout << quality << " ====" << std::endl;
     }
 
     if (this->precomputed)
-        this->train_data = &distances;
+        this->train_data = std::shared_ptr<Mat<T>>(&distances, std::default_delete<Mat<T>>());
     else
-        this->train_data = &train_data;
+        this->train_data = std::shared_ptr<Mat<T>>(&train_data, [](Mat<T> *p) {});
 
     this->k = best_opf.k;
     this->n_clusters = best_opf.n_clusters;
@@ -1253,6 +1345,132 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     this->delta = best_opf.delta;
 }
 
+/*****************************************/
+/*              Persistence              */
+/*****************************************/
+
+template <class T>
+std::string UnsupervisedOPF<T>::serialize(uchar flags)
+{
+    if (this->precomputed)
+        throw std::invalid_argument("Serialization for precomputed OPF not implemented yet");
+
+    // Open file
+    std::ostringstream output   ;
+    int n_samples = this->train_data->rows;
+    int n_features = this->train_data->cols;
+
+    // Header
+    write_bin<char>(output, "OPF", 3);
+    write_bin<uchar>(output, Type::Clustering);
+    write_bin<uchar>(output, flags);
+    write_bin<uchar>(output, static_cast<uchar>(0)); // Reserved byte
+    write_bin<int>(output, n_samples);
+    write_bin<int>(output, n_features);
+
+    // Scalar data
+    write_bin<int>(output, this->k);
+    write_bin<int>(output, this->n_clusters);
+    write_bin<float>(output, this->denominator);
+    write_bin<float>(output, this->sigma_sq);
+
+    // Data
+    int size = this->train_data->size;
+    const T* data = this->train_data->row(0);
+    write_bin<T>(output, data, size);
+
+    // Nodes
+    for (int i = 0; i < n_samples; i++)
+    {
+        write_bin<float>(output, this->nodes[i].value);
+        write_bin<int>(output, this->nodes[i].label);
+    }
+
+    return output.str();
+}
+
+template <class T>
+UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
+{
+    UnsupervisedOPF<float> opf;
+
+    // Open stream
+    std::istringstream ifs(contents); // , std::ios::in | std::ios::binary
+
+    /// Header
+    int n_samples;
+    int n_features;
+    char header[4];
+
+    // Check if stream is an OPF serialization
+    read_bin<char>(ifs, header, 3);
+    header[3] = '\0';
+    if (strcmp(header, "OPF"))
+        throw std::invalid_argument("Input is not an OPF serialization");    
+
+    // Get type and flags
+    uchar type = read_bin<uchar>(ifs);
+    read_bin<uchar>(ifs); // Flags byte
+    read_bin<uchar>(ifs); // reserved byte
+
+    if (type != Type::Clustering)
+        throw std::invalid_argument("Input is not an Unsupervised OPF serialization");
+
+    // Data size
+    n_samples = read_bin<int>(ifs);
+    n_features = read_bin<int>(ifs);
+
+    // Scalar data
+    opf.k = read_bin<int>(ifs);
+    opf.n_clusters = read_bin<int>(ifs);
+    opf.denominator = read_bin<float>(ifs);
+    opf.sigma_sq = read_bin<float>(ifs);
+
+    /// Data
+    // Temporary var to read data, since opf's train_data is const
+    auto train_data = std::shared_ptr<Mat<T>>(new Mat<T>(n_samples, n_features), std::default_delete<Mat<T>>());
+    // Read data
+    int size = n_samples * n_features;
+    T* data = train_data->row(0);
+    read_bin<T>(ifs, data, size);
+    // Assign to opf
+    opf.train_data = train_data;
+
+    // Nodes
+    opf.nodes = std::vector<NodeKNN>(n_samples);
+    for (int i = 0; i < n_samples; i++)
+    {
+        opf.nodes[i].value = read_bin<float>(ifs);
+        opf.nodes[i].label = read_bin<int>(ifs);
+    }
+
+    return opf;
+}
+
+/*****************************************/
+
+// template <class T>
+// auto unserialize(std::string& contents)
+// {
+//     if (contents.find("OPF") != 0)
+//         throw std::invalid_argument("Input is not an OPF serialization");
+//     else
+//     {
+//         uchar type = (unsigned char) contents[3];
+//         switch (type)
+//         {
+//             case Type::Classifier:
+//                 return SupervisedOPF<T>::unserialize(contents);
+//             case Type::Clustering:
+//                 return UnsupervisedOPF<T>::unserialize(contents);
+//             default:
+//                 std::string error("Unknown OPF type: ");
+//                 error += std::to_string(type);
+//                 throw std::invalid_argument(error);
+//         }
+//     }
+
+// }
 
 }
 

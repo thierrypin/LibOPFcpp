@@ -21,6 +21,7 @@
 
 
 #include <iostream>
+#include <fstream>
 
 #include "libopfcpp/OPF.hpp"
 #include "libopfcpp/util.hpp" // General utilities
@@ -37,7 +38,7 @@ int main()
     vector<int> labels, train_labels, test_labels;
 
     // Read the data however you prefer
-    // There are 
+    // There are a few helper functions in libopfcpp/util.hpp
     opf::read_mat_labels("data/digits.dat", data, labels); // in util.hpp
     cout << "Data shape: " << data.rows << ", " << data.cols << endl;
 
@@ -50,6 +51,9 @@ int main()
     opf::index_by_list<int>(labels, splits.first, train_labels);
     opf::index_by_list<int>(labels, splits.second, test_labels);
 
+
+    cout << "########################################" << endl;
+    cout << "Supervised OPF" << endl;
     /////////////////////////////////////////////
     // Fit and predict
     opf::SupervisedOPF<float> opf;
@@ -61,23 +65,55 @@ int main()
     float acc1 = opf::accuracy(test_labels, preds); // in util.hpp
     cout << "Accuracy: " << acc1*100 << "%" << endl;
 
-    // Now test persistence
-    cout << "Write..." << endl;
-    opf.write("teste.dat");
 
+
+    /*** Now test persistence ***/
+    // Write
+    cout << "Write..." << endl;
+
+    {   // Sub scope to destroy variable "contents"
+        std::string contents = opf.serialize(opf::SFlags::SavePrototypes);
+        std::ofstream ofs ("teste.dat", std::ios::out | std::ios::binary);
+        if (!ofs)
+        {
+            std::cout << "Can't open file" << std::endl;
+            return -1;
+        }
+        
+        opf::write_bin<char>(ofs, contents.data(), contents.size());
+        ofs.close();
+    }
+
+
+
+    // Read
     cout << "Read..." << endl;
-    opf::SupervisedOPF<float> opf2;
-    opf::SupervisedOPF<float>::read("teste.dat", opf2);
+    // Read file contents
+    std::ifstream ifs ("teste.dat", std::ios::in | std::ios::binary);
+    if (!ifs)
+    {
+        std::cout << "Can't open file" << std::endl;
+        return -1;
+    }
+    std::string contents( (std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()) );
+    ifs.close();
+
+    // Unserialize contents into an OPF object
+    opf::SupervisedOPF<float> opf2 = opf::SupervisedOPF<float>::unserialize(contents);
 
     // Predict again an check if accuracies are equal
     preds = opf2.predict(test_data);
     float acc2 = opf::accuracy(test_labels, preds); // in util.hpp
     cout << "Accuracy: " << acc2*100 << "%" << endl;
 
+
     if (acc1 == acc2)
         cout << "Model persistence successful." << endl;
     else
         cout << "Model persistence failed." << endl;
+
+    cout << "########################################" << endl;
+    cout << "Unsupervised OPF" << endl;
 
     return 0;
 }

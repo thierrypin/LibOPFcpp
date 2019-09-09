@@ -71,25 +71,29 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    /****************************
+     * Parsing and initialization
+     ****************************/
     Mat<float> data, train_data;
     vector<int> labels, train_labels;
-    read_mat_labels<float>(argv[1], data, labels);
-    
+
     int kmin = stoi(argv[2]);
     int kmax = stoi(argv[3]);
     int step = stoi(argv[4]);
-    float frac = 0.1;
+    float frac = 0.5;
     if (argc >= 6)
         frac = stof(argv[5]);
 
+    // Get data
+    read_mat_labels<float>(argv[1], data, labels);
+    
+    // Train/test split
     StratifiedShuffleSplit sss(frac);
     pair<vector<int>, vector<int>> split = sss.split(labels);
 
+    // Matrix indexing
     index_by_list(data, split.first, train_data);
     index_by_list(labels, split.first, train_labels);
-    
-    // train_data = data;
-    // train_labels = labels;
 
     cout << "Train size: " << train_data.rows << "x" << train_data.cols << endl;
 
@@ -98,54 +102,106 @@ int main(int argc, char *argv[])
         unique_labels.insert(labels[i]);
     
     cout << unique_labels.size() << " unique labels." << endl;
-
-    // for (auto it = unique_labels.begin(); it != unique_labels.end(); ++it)
-    //     cout << *it << " ";
-    // cout << endl;
-
     TIMING_SECTION("Read data", outchannel, &measurement);
 
 
 
-    UnsupervisedOPF<float> opf;
-    opf.find_best_k(train_data, kmin, kmax, step);
-    // for (int i = 0; i < 74; i++)
-    //     opf.fit(train_data);
+    cout << "\n\nTraining and prediction" << endl;
+    cout << "-----------------------" << endl;
 
+    /****************************
+     * Classification
+     ****************************/
+
+    UnsupervisedOPF<float> opf;
+    // Find best k
+    opf.find_best_k(train_data, kmin, kmax, step);
     cout << "k: " << opf.get_k() << endl;
 
     TIMING_SECTION("Fit", outchannel, &measurement);
 
+    // Predict
     vector<int> assigned_labels = opf.predict(train_data);
-
     TIMING_SECTION("Predict", outchannel, &measurement);
 
+
+    /******************************
+     * Build correspondence matrix
+     ******************************/
     cout << opf.get_n_clusters() << " clusters." << endl;
 
+    
+    // Create and assign Mat
     Mat<int> correspondence(unique_labels.size(), opf.get_n_clusters(), 0);
-    cout << "Build mat " << correspondence.rows << "x" << correspondence.cols << endl;
-
     for (size_t i = 0; i < train_labels.size(); i++)
         correspondence[train_labels[i]][assigned_labels[i]]++;
 
-    
-    cout << "Populate mat" << endl;
-
+    // Print results
     for (int i = 0; i < correspondence.rows; i++)
     {
         for (int j = 0; j < correspondence.cols; j++)
-        {
             printf("% 4d ", correspondence[i][j]);
-            // cout << correspondence[i][j] << " ";
-        }
         cout << endl;
     }
 
-    cout << opf.get_n_clusters() << " clusters." << endl;
-
     TIMING_SECTION("Confusion", outchannel, &measurement);
 
-    //
+    /******************************
+     * Persistence
+     ******************************/
+
+    ////////////////////////////////////////////////
+    cout << "\n\nSerialization and persistence" << endl;
+    cout << "------------------------------" << endl;
+
+    {   // Sub scope to destroy variable "contents"
+        std::string contents = opf.serialize(opf::SFlags::SavePrototypes);
+        std::ofstream ofs ("teste.dat", std::ios::out | std::ios::binary);
+        if (!ofs)
+        {
+            std::cout << "Can't open file" << std::endl;
+            return -1;
+        }
+        opf::write_bin<char>(ofs, contents.data(), contents.size());
+        ofs.close();
+    }
+    TIMING_SECTION("Serialize and persist", outchannel, &measurement);
+
+    /////////////////////
+    // Read file contents
+    std::ifstream ifs ("teste.dat", std::ios::in | std::ios::binary);
+    if (!ifs)
+    {
+        std::cout << "Can't open file" << std::endl;
+        return -1;
+    }
+    std::string contents( (std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()) );
+    ifs.close();
+
+    // Unserialize contents into an OPF object
+    opf::UnsupervisedOPF<float> opf2 = opf::UnsupervisedOPF<float>::unserialize(contents);
+    cout << "Loaded model: k=" << opf2.get_k() << ", " << opf.get_n_clusters() << " clusters" << endl;
+
+    TIMING_SECTION("Loading saved model", outchannel, &measurement);
+
+
+
+    ////////////////////////////////////////////////////////
+    vector<int> persist_preds = opf2.predict(train_data);
+
+    // Build and populate mat
+    Mat<int> correspondence2(unique_labels.size(), opf2.get_n_clusters(), 0);
+    for (size_t i = 0; i < persist_preds.size(); i++)
+        correspondence2[train_labels[i]][persist_preds[i]]++;
+
+    // Print results
+    for (int i = 0; i < correspondence2.rows; i++)
+    {
+        for (int j = 0; j < correspondence2.cols; j++)
+            printf("% 4d ", correspondence2[i][j]);
+        cout << endl;
+    }
+
 
     TIMING_END(outchannel);
 
