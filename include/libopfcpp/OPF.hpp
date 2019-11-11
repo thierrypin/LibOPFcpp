@@ -69,7 +69,8 @@ enum Type : unsigned char
 // Serialization Flags
 enum SFlags : unsigned char
 {
-    SavePrototypes = 1,
+    Sup_SavePrototypes = 1,
+    Unsup_Anomaly = 2,
 };
 
 ///////////////
@@ -341,7 +342,7 @@ public:
 };
 
 // The first row has n-1 cols, the second has n-2, and so on until row n has 0 cols.
-// This way, 
+// This way,
 #define SWAP(a, b) (((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b)))
 template <class T>
 inline int DistMat<T>::get_index(int i, int j) const
@@ -625,7 +626,6 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
     }
 }
 
-// TODO AQUI ******************************
 /**
  * Trains the model with the given data and labels.
  * 
@@ -802,7 +802,7 @@ std::string SupervisedOPF<T>::serialize(uchar flags)
     write_bin<int>(output, this->ordered_nodes.data(), n_samples);
 
     // Prototypes
-    if (flags & SFlags::SavePrototypes)
+    if (flags & SFlags::Sup_SavePrototypes)
     {
         // Find which are prototypes first, because we need the correct amount
         std::set<int> prots;
@@ -869,7 +869,7 @@ SupervisedOPF<T> SupervisedOPF<T>::unserialize(std::string& contents)
     opf.ordered_nodes = std::vector<int>(n_samples);
     read_bin<int>(ifs, opf.ordered_nodes.data(), n_samples);
 
-    if (flags & SFlags::SavePrototypes)
+    if (flags & SFlags::Sup_SavePrototypes)
     {
         int prots = read_bin<int>(ifs);
         for (int i = 0; i < prots; i++)
@@ -984,10 +984,11 @@ class UnsupervisedOPF
 private:
     // Model
     std::shared_ptr<const Mat<T>> train_data;   // Training data (original vectors or distance matrix)
-    std::vector<NodeKNN> nodes; // Learned model
-    std::vector<int> queue;     // Priority queue implemented as a linear search in a vector
-    int k;                      // The number of neighbors to build the graph
-    int n_clusters;             // Number of clusters in the model -- computed during fit
+    distance_function<T> distance; // Distance function
+    std::vector<NodeKNN> nodes;    // Learned model
+    std::vector<int> queue;        // Priority queue implemented as a linear search in a vector
+    int k;                         // The number of neighbors to build the graph
+    int n_clusters;                // Number of clusters in the model -- computed during fit
 
     // Training attributes
     float sigma_sq;             // Sigma squared, used to compute probability distribution function
@@ -995,8 +996,9 @@ private:
     float denominator;          // sqrt(2 * math.pi * sigma_sq) -- compute it only once
 
     // Options
+    float thresh;
+    bool anomaly;
     bool precomputed;
-    distance_function<T> distance;
 
     // Queue capabilities
     int get_max();
@@ -1007,7 +1009,7 @@ private:
     void cluster();
 
 public:
-    UnsupervisedOPF(int k=5, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
+    UnsupervisedOPF(int k=5, bool precomputed=false, bool anomaly=false, float thresh=1., distance_function<T> distance=euclidean_distance<T>);
     
     void fit(const Mat<T> &train_data);
     std::vector<int> fit_predict(const Mat<T> &train_data);
@@ -1028,10 +1030,14 @@ public:
 };
 
 template <class T>
-UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool precomputed, distance_function<T> distance)
+UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool precomputed, bool anomaly, float thresh, distance_function<T> distance)
 {
     this->k = k;
     this->precomputed = precomputed;
+    this->anomaly = anomaly;
+    if (this->anomaly)
+        this->n_clusters = 2;
+    this->thresh = thresh;
     this->distance = distance;
 }
 
@@ -1194,7 +1200,8 @@ void UnsupervisedOPF<T>::fit(const Mat<T> &train_data)
     this->train_data = std::shared_ptr<const Mat<T>>(&train_data, [](const Mat<T> *p) {});
     this->nodes = std::vector<NodeKNN>(this->train_data->rows);
     this->build_initialize();
-    this->cluster();
+    if (!this->anomaly)
+        this->cluster();
 }
 
 // Fit and predict for all nodes
@@ -1204,8 +1211,13 @@ std::vector<int> UnsupervisedOPF<T>::fit_predict(const Mat<T> &train_data)
     this->fit(train_data);
 
     std::vector<int> labels(this->nodes.size());
-    for (size_t i = 0; i < this->nodes.size(); i++)
-        labels[i] = this->nodes[i].label;
+
+    if (this->anomaly)
+        for (size_t i = 0; i < this->nodes.size(); i++)
+            labels[i] = (this->nodes[i].rho < this->thresh) ? 1 : 0;
+    else
+        for (size_t i = 0; i < this->nodes.size(); i++)
+            labels[i] = this->nodes[i].label;
     
     return labels;
 }
@@ -1249,21 +1261,29 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
 
         float rho = sum / div;
 
-        // And find which node conquers this test sample
-        float maxval = 0;
-        int maxidx = -1;
-        for (int j = 0; j < n_neighbors; j++)
+        if (this->anomaly)
         {
-            int s = neighbors[j].first;
-            float val = std::min(this->nodes[s].value, rho);
-            if (val > maxval)
-            {
-                maxval = val;
-                maxidx = s;
-            }
+            // And returns anomaly detection based on graph density
+            preds[i] = (rho < this->thresh) ? 1 : 0;
         }
+        else
+        {
+            // And find which node conquers this test sample
+            float maxval = 0;
+            int maxidx = -1;
+            for (int j = 0; j < n_neighbors; j++)
+            {
+                int s = neighbors[j].first;
+                float val = std::min(this->nodes[s].value, rho);
+                if (val > maxval)
+                {
+                    maxval = val;
+                    maxidx = s;
+                }
+            }
 
-        preds[i] = this->nodes[maxidx].label;
+            preds[i] = this->nodes[maxidx].label;
+        }
     }
 
     return preds;
@@ -1275,6 +1295,8 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
 template <class T>
 float UnsupervisedOPF<T>::quality_metric()
 {
+    if (this->anomaly)
+        throw std::invalid_argument("Quality metric not implemented for anomaly detection yet");
     std::vector<float> w(this->n_clusters, 0);
     std::vector<float> w_(this->n_clusters, 0);
     for (int i = 0; i < this->train_data->rows; i++)
@@ -1316,7 +1338,7 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     for (int k = kmin; k <= kmax; k += step)
     {
         // Instanciate and train the model
-        UnsupervisedOPF<float> opf(k, precompute, this->distance);
+        UnsupervisedOPF<float> opf(k, precompute, false, 0, this->distance);
         if (precompute)
             opf.fit(distances);
         else
@@ -1360,6 +1382,11 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
     int n_samples = this->train_data->rows;
     int n_features = this->train_data->cols;
 
+    // Output flags
+    flags = 0; // For now, there are no user-defined flags
+    if (this->anomaly)
+        flags += SFlags::Unsup_Anomaly;
+
     // Header
     write_bin<char>(output, "OPF", 3);
     write_bin<uchar>(output, Type::Clustering);
@@ -1370,7 +1397,8 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
 
     // Scalar data
     write_bin<int>(output, this->k);
-    write_bin<int>(output, this->n_clusters);
+    if (!this->anomaly)
+        write_bin<int>(output, this->n_clusters);
     write_bin<float>(output, this->denominator);
     write_bin<float>(output, this->sigma_sq);
 
@@ -1383,7 +1411,8 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
     for (int i = 0; i < n_samples; i++)
     {
         write_bin<float>(output, this->nodes[i].value);
-        write_bin<int>(output, this->nodes[i].label);
+        if (!this->anomaly)
+            write_bin<int>(output, this->nodes[i].label);
     }
 
     return output.str();
@@ -1410,8 +1439,11 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
 
     // Get type and flags
     uchar type = read_bin<uchar>(ifs);
-    read_bin<uchar>(ifs); // Flags byte
+    uchar flags = read_bin<uchar>(ifs); // Flags byte
     read_bin<uchar>(ifs); // reserved byte
+
+    if (flags & SFlags::Unsup_Anomaly)
+        opf.anomaly = true;
 
     if (type != Type::Clustering)
         throw std::invalid_argument("Input is not an Unsupervised OPF serialization");
@@ -1422,7 +1454,8 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
 
     // Scalar data
     opf.k = read_bin<int>(ifs);
-    opf.n_clusters = read_bin<int>(ifs);
+    if (!opf.anomaly)
+        opf.n_clusters = read_bin<int>(ifs);
     opf.denominator = read_bin<float>(ifs);
     opf.sigma_sq = read_bin<float>(ifs);
 
@@ -1441,7 +1474,8 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
     for (int i = 0; i < n_samples; i++)
     {
         opf.nodes[i].value = read_bin<float>(ifs);
-        opf.nodes[i].label = read_bin<int>(ifs);
+        if (!opf.anomaly)
+            opf.nodes[i].label = read_bin<int>(ifs);
     }
 
     return opf;

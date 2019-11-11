@@ -146,6 +146,30 @@ int main(int argc, char *argv[])
 
     TIMING_SECTION("Confusion", outchannel, &measurement);
 
+
+    /******************************
+     * Find anomaly points
+     ******************************/
+    cout << "\n\nFind anomaly points" << endl;
+    cout << "-----------------------" << endl;
+
+    UnsupervisedOPF<float> anomaly(opf.get_k(), false, true, .001);
+    vector<int> anomaly_preds = anomaly.fit_predict(train_data);
+    
+    correspondence = Mat<int>(unique_labels.size(), anomaly.get_n_clusters(), 0);
+    for (size_t i = 0; i < train_labels.size(); i++)
+        correspondence[train_labels[i]][anomaly_preds[i]]++;
+
+    // Print results
+    for (int i = 0; i < correspondence.rows; i++)
+    {
+        for (int j = 0; j < correspondence.cols; j++)
+            printf("% 4d ", correspondence[i][j]);
+        cout << endl;
+    }
+
+    TIMING_SECTION("Anomaly", outchannel, &measurement);
+
     /******************************
      * Persistence
      ******************************/

@@ -34,6 +34,7 @@ import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument("-i", "--input", action='store', help="Input file.", type=str)
+    parser.add_argument("-l", "--labels", action='store_true', help="Input file.")
 
     return parser.parse_args()
 
@@ -46,14 +47,24 @@ def convert(args):
     out_path = os.path.splitext(args.input)[0] + ".dat"
     
     rows, cols = arr.shape
+    if args.labels:
+        cols -= 1
     print(rows, cols)
-    rav = arr.ravel()
 
     header = struct.pack('ii', int(rows), int(cols))
-    data = struct.pack('f'*rav.shape[0], *rav)
+    data = []
+    if args.labels:
+        for row in arr:
+            data.append(struct.pack('i', int(row[0])))
+            data.append(struct.pack('f'*(row.shape[0]-1), *row[1:]))
+    else:
+        rav = arr.ravel()
+        data = data.append(struct.pack('f'*rav.shape[0], *rav))
 
     with open(out_path, "wb") as f:
-        f.write(header+data)
+        f.write(header)
+        for d in data:
+            f.write(d)
 
 
 def main():
