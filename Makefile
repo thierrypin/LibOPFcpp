@@ -1,5 +1,5 @@
 
-all: test openmp persistence utest
+all: test openmp persistence utest anomaly
 	
 
 test:
@@ -13,6 +13,9 @@ persistence:
 
 utest:
 	clang++ samples/test_unsup.cpp -std=c++1y -o test_unsup -Iinclude -O3 -Wall
+
+anomaly:
+	clang++ samples/test_anomaly.cpp -std=c++1y -o test_anomaly -Iinclude -O3 -Wall
 
 clean:
 	rm -f test test_parallel persistence test_unsup

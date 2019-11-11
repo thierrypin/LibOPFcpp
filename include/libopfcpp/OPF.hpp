@@ -1023,6 +1023,7 @@ public:
     // Getters
     int get_n_clusters() {return this->n_clusters;}
     int get_k() {return this->k;}
+    float get_thresh() {return this->thresh;}
 
     // Serialization functions
     std::string serialize(uchar flags=0);
@@ -1399,6 +1400,8 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
     write_bin<int>(output, this->k);
     if (!this->anomaly)
         write_bin<int>(output, this->n_clusters);
+    else
+        write_bin<float>(output, this->thresh);
     write_bin<float>(output, this->denominator);
     write_bin<float>(output, this->sigma_sq);
 
@@ -1456,6 +1459,11 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
     opf.k = read_bin<int>(ifs);
     if (!opf.anomaly)
         opf.n_clusters = read_bin<int>(ifs);
+    else
+    {
+        opf.thresh = read_bin<float>(ifs);
+        opf.n_clusters = 2;
+    }
     opf.denominator = read_bin<float>(ifs);
     opf.sigma_sq = read_bin<float>(ifs);
 

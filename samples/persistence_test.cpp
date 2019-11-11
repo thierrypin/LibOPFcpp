@@ -72,7 +72,7 @@ int main()
     cout << "Write..." << endl;
 
     {   // Sub scope to destroy variable "contents"
-        std::string contents = opf.serialize(opf::SFlags::SavePrototypes);
+        std::string contents = opf.serialize(opf::SFlags::Sup_SavePrototypes);
         std::ofstream ofs ("teste.dat", std::ios::out | std::ios::binary);
         if (!ofs)
         {
