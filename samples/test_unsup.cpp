@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
     cout << "\n\nFind anomaly points" << endl;
     cout << "-----------------------" << endl;
 
-    UnsupervisedOPF<float> anomaly(opf.get_k(), false, true, .001);
+    UnsupervisedOPF<float> anomaly(opf.get_k(), true, .001, false);
     vector<int> anomaly_preds = anomaly.fit_predict(train_data);
     
     correspondence = Mat<int>(unique_labels.size(), anomaly.get_n_clusters(), 0);

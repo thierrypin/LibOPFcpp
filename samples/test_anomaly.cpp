@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
      * Classification
      ****************************/
 
-    UnsupervisedOPF<float> opf(k, false, true, thresh);
+    UnsupervisedOPF<float> opf(k, true, thresh, false);
     // Find best k
     opf.fit(train_data);
     cout << "k: " << opf.get_k() << endl;
