@@ -1357,7 +1357,7 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
     for (int k = kmin; k <= kmax; k += step)
     {
         // Instanciate and train the model
-        UnsupervisedOPF<float> opf(k, precompute, false, 0, this->distance);
+        UnsupervisedOPF<float> opf(k, false, 0, precompute, this->distance);
         if (precompute)
             opf.fit(distances);
         else
