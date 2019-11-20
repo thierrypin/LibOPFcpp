@@ -111,14 +111,15 @@ class Mat
 protected:
     std::shared_ptr<T> data;
 public:
-    int rows, cols;
-    int size;
+    size_t rows, cols;
+    size_t size;
+    size_t stride;
     Mat();
     Mat(const Mat<T>& other);
     Mat(size_t rows, size_t cols);
-    Mat(size_t rows, size_t cols, T val);
-    Mat(std::shared_ptr<T>& data, size_t rows, size_t cols);
-    Mat(T* data, size_t rows, size_t cols);
+    Mat(size_t rows, size_t cols, T val0);
+    Mat(std::shared_ptr<T>& data, size_t rows, size_t cols, size_t stride = 0);
+    Mat(T* data, size_t rows, size_t cols, size_t stride=0);
 
     virtual T& at(size_t i, size_t j);
     const virtual T at(size_t i, size_t j) const;
@@ -135,7 +136,7 @@ public:
 template <class T>
 Mat<T>::Mat()
 {
-    this->rows = this->cols = this-> size = 0;
+    this->rows = this->cols = this->size = this->stride = 0;
 }
 
 template <class T>
@@ -145,6 +146,7 @@ Mat<T>::Mat(const Mat<T>& other)
     this->cols = other.cols;
     this->size = other.size;
     this->data = other.data;
+    this->stride = other.stride;
 }
 
 template <class T>
@@ -153,6 +155,7 @@ Mat<T>::Mat(size_t rows, size_t cols)
     this->rows = rows;
     this->cols = cols;
     this->size = rows * cols;
+    this->stride = cols;
     this->data = std::shared_ptr<T>(new T[this->size], std::default_delete<T[]>());
 }
 
@@ -162,6 +165,7 @@ Mat<T>::Mat(size_t rows, size_t cols, T val)
     this->rows = rows;
     this->cols = cols;
     this->size = rows * cols;
+    this->stride = cols;
     this->data = std::shared_ptr<T>(new T[this->size], std::default_delete<T[]>());
 
     for (size_t i = 0; i < rows; i++)
@@ -173,73 +177,84 @@ Mat<T>::Mat(size_t rows, size_t cols, T val)
 }
 
 template <class T>
-Mat<T>::Mat(std::shared_ptr<T>& data, size_t rows, size_t cols)
+Mat<T>::Mat(std::shared_ptr<T>& data, size_t rows, size_t cols, size_t stride)
 {
     this->rows = rows;
     this->cols = cols;
     this->size = rows * cols;
     this->data = data;
+    if (stride)
+        this->stride = stride;
+    else
+        this->stride = cols;
 }
 
 // Receives a pointer to some data, which may not be deleted.
 template <class T>
-Mat<T>::Mat(T* data, size_t rows, size_t cols)
+Mat<T>::Mat(T* data, size_t rows, size_t cols, size_t stride)
 {
     this->rows = rows;
     this->cols = cols;
     this->size = rows * cols;
     this->data = std::shared_ptr<T>(data, [](T *p) {});
+    if (stride)
+        this->stride = stride;
+    else
+        this->stride = cols;
 }
 
 template <class T>
 T& Mat<T>::at(size_t i, size_t j)
 {
-    size_t idx = i * this->cols + j;
+    size_t idx = i * this->stride + j;
     return this->data.get()[idx];
 }
 
 template <class T>
 const T Mat<T>::at(size_t i, size_t j) const
 {
-    size_t idx = i * this->cols + j;
+    size_t idx = i * this->stride + j;
     return this->data.get()[idx];
 }
 
 template <class T>
 T* Mat<T>::row(size_t i)
 {
-    size_t idx = i * this->cols;
+    size_t idx = i * this->stride;
     return &this->data.get()[idx];
 }
 
 template <class T>
 const T* Mat<T>::row(size_t i) const
 {
-    size_t idx = i * this->cols;
+    size_t idx = i * this->stride;
     return &this->data.get()[idx];
 }
 
 template <class T>
 T* Mat<T>::operator[](size_t i)
 {
-    size_t idx = i * this->cols;
+    size_t idx = i * this->stride;
     return &this->data.get()[idx];
 }
 
 template <class T>
 const T* Mat<T>::operator[](size_t i) const
 {
-    size_t idx = i * this->cols;
+    size_t idx = i * this->stride;
     return &this->data.get()[idx];
 }
 
 template <class T>
 Mat<T>& Mat<T>::operator=(const Mat<T>& other)
 {
-    this->rows = other.rows;
-    this->cols = other.cols;
-    this->size = other.size;
-    this->data = other.data;
+    if (this != &other) {
+        this->rows = other.rows;
+        this->cols = other.cols;
+        this->size = other.size;
+        this->data = other.data;
+        this->stride = other.stride;
+    }
 
     return *this;
 }
@@ -252,7 +267,7 @@ Mat<T> Mat<T>::copy()
         for (size_t j = 0; j < this->cols; j++)
             out[i][j] = this->at(i, j);
     
-    return out;
+    return std::move(out);
 }
 
 template <class T>
@@ -309,10 +324,10 @@ Mat<T> compute_train_distances(const Mat<T> &features, distance_function<T> dist
     Mat<float> distances(features.rows, features.rows);
 
     #pragma omp parallel for shared(features, distances)
-    for (int i = 0; i < features.rows - 1; i++)
+    for (size_t i = 0; i < features.rows - 1; i++)
     {
         distances[i][i] = 0;
-        for (int j = i + 1; j < features.rows; j++)
+        for (size_t j = i + 1; j < features.rows; j++)
         {
             distances[i][j] = distances[j][i] = distance(features[i], features[j], features.cols);
         }
@@ -368,9 +383,9 @@ DistMat<T>::DistMat(const Mat<T>& features, distance_function<T> distance)
     this->cols = features.rows;
     this->size = (this->rows * (this->rows - 1)) / 2;
     this->data = std::shared_ptr<T>(new float[this->size], std::default_delete<float[]>());
-    for (int i = 0; i < this->rows; i++)
+    for (size_t i = 0; i < this->rows; i++)
     {
-        for (int j = i+1; j < this->rows; j++)
+        for (size_t j = i+1; j < this->rows; j++)
             this->data.get()[get_index(i, j)] = distance(features[i], features[j], features.cols);
     }
 }
@@ -535,8 +550,10 @@ private:
     // Model
     Mat<T> train_data; // Training data (original vectors or distance matrix)
     std::vector<Node> nodes; // Learned model
-    std::vector<int> ordered_nodes; // List of nodes ordered by cost. Useful for speeding up classification
-
+    // List of nodes ordered by cost. Useful for speeding up classification
+    // Its not size_t to reduce memory usage, since ML may handle large data
+    std::vector<unsigned int> ordered_nodes; 
+                                             
     // Options
     bool precomputed;
     distance_function<T> distance;
@@ -552,7 +569,7 @@ public:
 
     // Serialization functions
     std::string serialize(uchar flags=0);
-    static SupervisedOPF<T> unserialize(std::string& contents);
+    static SupervisedOPF<T> unserialize(const std::string& contents);
 
     // Training information
     std::vector<std::vector<float>> get_prototypes();
@@ -799,7 +816,7 @@ std::string SupervisedOPF<T>::serialize(uchar flags)
     }
 
     // Ordered_nodes
-    write_bin<int>(output, this->ordered_nodes.data(), n_samples);
+    write_bin<unsigned int>(output, this->ordered_nodes.data(), n_samples);
 
     // Prototypes
     if (flags & SFlags::Sup_SavePrototypes)
@@ -821,7 +838,7 @@ std::string SupervisedOPF<T>::serialize(uchar flags)
 }
 
 template <class T>
-SupervisedOPF<T> SupervisedOPF<T>::unserialize(std::string& contents)
+SupervisedOPF<T> SupervisedOPF<T>::unserialize(const std::string& contents)
 {
     // Header
     int n_samples;
@@ -866,8 +883,8 @@ SupervisedOPF<T> SupervisedOPF<T>::unserialize(std::string& contents)
     }
 
     // Ordered_nodes
-    opf.ordered_nodes = std::vector<int>(n_samples);
-    read_bin<int>(ifs, opf.ordered_nodes.data(), n_samples);
+    opf.ordered_nodes = std::vector<unsigned int>(n_samples);
+    read_bin<unsigned int>(ifs, opf.ordered_nodes.data(), n_samples);
 
     if (flags & SFlags::Sup_SavePrototypes)
     {
@@ -879,7 +896,7 @@ SupervisedOPF<T> SupervisedOPF<T>::unserialize(std::string& contents)
         }
     }
 
-    return opf;
+    return std::move(opf);
 }
 
 /*****************************************/
@@ -890,7 +907,7 @@ template <class T>
 std::vector<std::vector<float>> SupervisedOPF<T>::get_prototypes()
 {
     std::set<int> prots;
-    for (int i = 0; i < this->train_data.rows; i++)
+    for (size_t i = 0; i < this->train_data.rows; i++)
     {
         if (this->nodes[i].is_prototype)
             prots.insert(i);
@@ -1009,7 +1026,7 @@ private:
     void cluster();
 
 public:
-    UnsupervisedOPF(int k=5, bool precomputed=false, bool anomaly=false, float thresh=1., distance_function<T> distance=euclidean_distance<T>);
+    UnsupervisedOPF(int k=5, bool anomaly=false, float thresh=.1, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
     
     void fit(const Mat<T> &train_data);
     std::vector<int> fit_predict(const Mat<T> &train_data);
@@ -1020,18 +1037,21 @@ public:
     // Clustering info
     float quality_metric();
 
-    // Getters
+    // Getters & Setters
     int get_n_clusters() {return this->n_clusters;}
     int get_k() {return this->k;}
+    float get_anomaly() {return this->anomaly;}
     float get_thresh() {return this->thresh;}
+    void set_thresh(float thresh) {this->thresh = thresh;}
+    float get_precomputed() {return this->precomputed;}
 
     // Serialization functions
     std::string serialize(uchar flags=0);
-    static UnsupervisedOPF<T> unserialize(std::string& contents);
+    static UnsupervisedOPF<T> unserialize(const std::string& contents);
 };
 
 template <class T>
-UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool precomputed, bool anomaly, float thresh, distance_function<T> distance)
+UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool anomaly, float thresh, bool precomputed, distance_function<T> distance)
 {
     this->k = k;
     this->precomputed = precomputed;
@@ -1084,13 +1104,10 @@ void UnsupervisedOPF<T>::build_graph()
     this->denominator = sqrt(2 * M_PI * this->sigma_sq);
 }
 
-// Build and initialize the graph
+// Initialize the graph nodes
 template <class T>
 void UnsupervisedOPF<T>::build_initialize()
 {
-    // Precompute during training to speed up the process?
-    this->build_graph();
-
     // Compute rho
     std::set<Pdist>::iterator it;
     for (size_t i = 0; i < this->nodes.size(); i++)
@@ -1200,6 +1217,7 @@ void UnsupervisedOPF<T>::fit(const Mat<T> &train_data)
 {
     this->train_data = std::shared_ptr<const Mat<T>>(&train_data, [](const Mat<T> *p) {});
     this->nodes = std::vector<NodeKNN>(this->train_data->rows);
+    this->build_graph();
     this->build_initialize();
     if (!this->anomaly)
         this->cluster();
@@ -1229,11 +1247,11 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
 {
     std::vector<int> preds(test_data.rows);
     // For each test sample
-    for (int i = 0; i < test_data.rows; i++)
+    for (size_t i = 0; i < test_data.rows; i++)
     {
         // Find the k nearest neighbors
         BestK bk(this->k);
-        for (int j = 0; j < static_cast<int>(this->nodes.size()); j++)
+        for (size_t j = 0; j < this->nodes.size(); j++)
         {
             if (i != j)
             {
@@ -1270,11 +1288,11 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
         else
         {
             // And find which node conquers this test sample
-            float maxval = 0;
+            float maxval = -INF;
             int maxidx = -1;
             for (int j = 0; j < n_neighbors; j++)
             {
-                int s = neighbors[j].first;
+                int s = neighbors[j].first;  // idx, distance
                 float val = std::min(this->nodes[s].value, rho);
                 if (val > maxval)
                 {
@@ -1300,7 +1318,7 @@ float UnsupervisedOPF<T>::quality_metric()
         throw std::invalid_argument("Quality metric not implemented for anomaly detection yet");
     std::vector<float> w(this->n_clusters, 0);
     std::vector<float> w_(this->n_clusters, 0);
-    for (int i = 0; i < this->train_data->rows; i++)
+    for (size_t i = 0; i < this->train_data->rows; i++)
     {
         int l = this->nodes[i].label;
 
@@ -1422,7 +1440,7 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
 }
 
 template <class T>
-UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
+UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(const std::string& contents)
 {
     UnsupervisedOPF<float> opf;
 
@@ -1486,33 +1504,10 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(std::string& contents)
             opf.nodes[i].label = read_bin<int>(ifs);
     }
 
-    return opf;
+    return std::move(opf);
 }
 
 /*****************************************/
-
-// template <class T>
-// auto unserialize(std::string& contents)
-// {
-//     if (contents.find("OPF") != 0)
-//         throw std::invalid_argument("Input is not an OPF serialization");
-//     else
-//     {
-//         uchar type = (unsigned char) contents[3];
-//         switch (type)
-//         {
-//             case Type::Classifier:
-//                 return SupervisedOPF<T>::unserialize(contents);
-//             case Type::Clustering:
-//                 return UnsupervisedOPF<T>::unserialize(contents);
-//             default:
-//                 std::string error("Unknown OPF type: ");
-//                 error += std::to_string(type);
-//                 throw std::invalid_argument(error);
-//         }
-//     }
-
-// }
 
 }
 
