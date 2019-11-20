@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 
         // Split
         SECTION_START(dataset.c_str());
-        printf("Data size %d x %d\n\n", data.rows, data.cols);
+        printf("Data size %lu x %lu\n\n", data.rows, data.cols);
 
         printf("Preparing data\n");
         StratifiedShuffleSplit sss(0.5);
