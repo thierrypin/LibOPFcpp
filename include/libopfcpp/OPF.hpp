@@ -221,28 +221,28 @@ template <class T>
 T* Mat<T>::row(size_t i)
 {
     size_t idx = i * this->stride;
-    return &this->data.get()[idx];
+    return this->data.get() + idx;
 }
 
 template <class T>
 const T* Mat<T>::row(size_t i) const
 {
     size_t idx = i * this->stride;
-    return &this->data.get()[idx];
+    return this->data.get() + idx;
 }
 
 template <class T>
 T* Mat<T>::operator[](size_t i)
 {
     size_t idx = i * this->stride;
-    return &this->data.get()[idx];
+    return this->data.get() + idx;
 }
 
 template <class T>
 const T* Mat<T>::operator[](size_t i) const
 {
     size_t idx = i * this->stride;
-    return &this->data.get()[idx];
+    return this->data.get() + idx;
 }
 
 template <class T>
@@ -264,8 +264,12 @@ Mat<T> Mat<T>::copy()
 {
     Mat<T> out(this->rows, this->cols);
     for (size_t i = 0; i < this->rows; i++)
+    {
+        T* row = this->row(i);
+        T* outrow = out.row(i);
         for (size_t j = 0; j < this->cols; j++)
-            out[i][j] = this->at(i, j);
+            outrow[j] = row[j];
+    }
     
     return std::move(out);
 }
@@ -567,6 +571,8 @@ public:
     void fit(const Mat<T> &train_data, const std::vector<int> &labels);
     std::vector<int> predict(const Mat<T> &test_data);
 
+    bool get_precomputed() {return this->precomputed;}
+
     // Serialization functions
     std::string serialize(uchar flags=0);
     static SupervisedOPF<T> unserialize(const std::string& contents);
@@ -804,9 +810,11 @@ std::string SupervisedOPF<T>::serialize(uchar flags)
     write_bin<int>(output, n_features);
 
     // Data
-    int size = this->train_data.size;
-    T* data = this->train_data.row(0);
-    write_bin<T>(output, data, size);
+    for (int i = 0; i < n_samples; i++)
+    {
+        const T* data = this->train_data.row(i);
+        write_bin<T>(output, data, n_features);
+    }
 
     // Nodes
     for (int i = 0; i < n_samples; i++)
@@ -1040,10 +1048,10 @@ public:
     // Getters & Setters
     int get_n_clusters() {return this->n_clusters;}
     int get_k() {return this->k;}
-    float get_anomaly() {return this->anomaly;}
+    bool get_anomaly() {return this->anomaly;}
     float get_thresh() {return this->thresh;}
     void set_thresh(float thresh) {this->thresh = thresh;}
-    float get_precomputed() {return this->precomputed;}
+    bool get_precomputed() {return this->precomputed;}
 
     // Serialization functions
     std::string serialize(uchar flags=0);
@@ -1424,9 +1432,11 @@ std::string UnsupervisedOPF<T>::serialize(uchar flags)
     write_bin<float>(output, this->sigma_sq);
 
     // Data
-    int size = this->train_data->size;
-    const T* data = this->train_data->row(0);
-    write_bin<T>(output, data, size);
+    for (int i = 0; i < n_samples; i++)
+    {
+        const T* data = this->train_data->row(i);
+        write_bin<T>(output, data, n_features);
+    }
 
     // Nodes
     for (int i = 0; i < n_samples; i++)
