@@ -39,7 +39,34 @@ def parse_args():
     return parser.parse_args()
 
 
-def convert(args):
+def npy_dat(args):
+    arr = np.load(args.input)
+    if arr.ndim != 2:
+        raise ValueError("Input should be bidimensional.")
+    
+    out_path = os.path.splitext(args.input)[0] + ".dat"
+    
+    rows, cols = arr.shape
+    if args.labels:
+        cols -= 1
+    print(rows, cols)
+
+    header = struct.pack('ii', int(rows), int(cols))
+    data = []
+    if args.labels:
+        for row in arr:
+            data.append(struct.pack('i', int(row[0])))
+            data.append(struct.pack('f'*(row.shape[0]-1), *row[1:]))
+    else:
+        rav = arr.ravel()
+        data = data.append(struct.pack('f'*rav.shape[0], *rav))
+
+    with open(out_path, "wb") as f:
+        f.write(header)
+        for d in data:
+            f.write(d)
+
+def dat_npy(args):
     arr = np.load(args.input)
     if arr.ndim != 2:
         raise ValueError("Input should be bidimensional.")
@@ -69,7 +96,7 @@ def convert(args):
 
 def main():
     args = parse_args()
-    convert(args)
+    npy_dat(args)
 
 
 

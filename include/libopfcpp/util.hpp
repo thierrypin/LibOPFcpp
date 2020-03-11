@@ -66,7 +66,7 @@ void print_matrix(Mat<T> m)
 }
 
 template <class T>
-Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_data, distance_function<T> distance=euclidean_distance<T>)
+Mat<float> compute_test_distances(const Mat<T>& test_data, const Mat<T>& train_data, distance_function<T> distance=euclidean_distance<T>)
 {
     Mat<float> distances(test_data.rows, train_data.rows);
     int vec_size = train_data.cols;
@@ -84,7 +84,7 @@ Mat<float> compute_test_distances(const Mat<T> &test_data, const Mat<T> &train_d
 }
 
 template <class T>
-bool read_mat(const std::string &filename, Mat<T> &data)
+bool read_mat(const std::string& filename, Mat<T>& data)
 {
     std::ifstream file (filename, std::ios::in | std::ios::binary);
 
@@ -115,7 +115,7 @@ bool read_mat(const std::string &filename, Mat<T> &data)
 }
 
 template <class T>
-bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int> &labels)
+bool read_mat_labels(const std::string& filename, Mat<T>& data, std::vector<int>& labels)
 {
     std::ifstream file (filename, std::ios::in | std::ios::binary);
 
@@ -153,10 +153,10 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
 
 
 template <class T>
-bool write_mat(const std::string &filename, const Mat<T> &data)
+bool write_mat(const std::string& filename, const Mat<T>& data)
 {
-    int rows = data.rows;
-    int cols = data.cols;
+    int rows = static_cast<int>(data.rows);
+    int cols = static_cast<int>(data.cols);
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat] Invalid data size:" << rows << ", " << cols << std::endl;
@@ -184,10 +184,10 @@ bool write_mat(const std::string &filename, const Mat<T> &data)
 }
 
 template <class T>
-bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std::vector<int> &labels)
+bool write_mat_labels(const std::string& filename, const Mat<T>& data, const std::vector<int>& labels)
 {
-    int rows = data.rows;
-    int cols = data.cols;
+    int rows = static_cast<int>(data.rows);
+    int cols = static_cast<int>(data.cols);
     if (rows == 0 || cols == 0)
     {
         std::cerr << "[util/write_mat_labels] Invalid data size:" << rows << ", " << cols << std::endl;
@@ -201,10 +201,11 @@ bool write_mat_labels(const std::string &filename, const Mat<T> &data, const std
         return false;
     }
 
+    // Write header
     file.write((char*)&rows, sizeof(int));
     file.write((char*)&cols, sizeof(int));
 
-
+    // Write data
     for (int i = 0; i < rows; i++)
     {
         // label
@@ -237,7 +238,7 @@ public:
 };
 
 // train indices, test indices
-std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(const std::vector<int> &labels)
+std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(const std::vector<int>& labels)
 {
     std::map<int, int> totals, target, current;
     std::map<int, int>::iterator it;
@@ -290,7 +291,7 @@ std::pair<std::vector<int>, std::vector<int>> StratifiedShuffleSplit::split(cons
 }
 
 template <class T>
-void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, std::vector<T> &output)
+void index_by_list(const std::vector<T>& data, const std::vector<int>& indices, std::vector<T>& output)
 {
     int size = indices.size();
     output = std::vector<T>(size);
@@ -302,7 +303,7 @@ void index_by_list(const std::vector<T> &data, const std::vector<int> &indices, 
 }
 
 template <class T>
-void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &output)
+void index_by_list(const Mat<T>& data, const std::vector<int>& indices, Mat<T>& output)
 {
     int size = (int) indices.size();
     output = Mat<T>(size, data.cols);
@@ -317,7 +318,7 @@ void index_by_list(const Mat<T> &data, const std::vector<int> &indices, Mat<T> &
 
 // Compute Papa's accuracy 
 // Papa, João & Falcão, Alexandre & Suzuki, C.T.N.. (2009). Supervised Pattern Classification Based on Optimum-Path Forest. International Journal of Imaging Systems and Technology. 19. 120 - 131. 10.1002/ima.20188.
-float papa_accuracy(const std::vector<int> &preds, const std::vector<int> &ground_truth)
+float papa_accuracy(const std::vector<int>& preds, const std::vector<int>& ground_truth)
 {
     if (ground_truth.size() != preds.size())
     {
@@ -368,7 +369,7 @@ float papa_accuracy(const std::vector<int> &preds, const std::vector<int> &groun
     return 1. - (error / (2.0 * nlabels));;
 }
 
-float accuracy(const std::vector<int> &ground_truth, const std::vector<int> &preds)
+float accuracy(const std::vector<int>& ground_truth, const std::vector<int>& preds)
 {
     if (ground_truth.size() != preds.size())
     {

@@ -1,5 +1,5 @@
-
-all: test openmp persistence unsup anomaly
+	
+all: test openmp persistence unsup anomaly datcsv
 	
 
 test:
@@ -17,6 +17,9 @@ unsup:
 anomaly:
 	clang++ samples/test_anomaly.cpp -std=c++1y -o test_anomaly -Iinclude -O3 -Wall
 
+datcsv:
+	clang++ tools/convert_dat_csv.cpp -std=c++1y -o tools/datcsv -Iinclude -O3 -Wall
+	
 clean:
-	rm -f test test_parallel persistence test_unsup
+	rm -f test test_parallel persistence test_unsup test_anomaly tools/datcsv
 
