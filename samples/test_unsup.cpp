@@ -107,9 +107,11 @@ int main(int argc, char *argv[])
     TIMING_SECTION("Read data", outchannel, &measurement);
 
 
-
     cout << "\n\nTraining and prediction" << endl;
     cout << "-----------------------" << endl;
+
+
+
 
     /****************************
      * Classification
@@ -125,6 +127,9 @@ int main(int argc, char *argv[])
     // Predict
     vector<int> assigned_labels = opf.predict(train_data);
     TIMING_SECTION("Predict", outchannel, &measurement);
+
+
+
 
 
     /******************************
@@ -149,6 +154,9 @@ int main(int argc, char *argv[])
     TIMING_SECTION("Confusion", outchannel, &measurement);
 
 
+
+
+
     /******************************
      * Find anomaly points
      ******************************/
@@ -157,7 +165,7 @@ int main(int argc, char *argv[])
 
     UnsupervisedOPF<float> anomaly(opf.get_k(), true, .001, false);
     vector<int> anomaly_preds = anomaly.fit_predict(train_data);
-    
+
     correspondence = Mat<int>(unique_labels.size(), anomaly.get_n_clusters(), 0);
     for (size_t i = 0; i < train_labels.size(); i++)
         correspondence[train_labels[i]][anomaly_preds[i]]++;
@@ -171,6 +179,9 @@ int main(int argc, char *argv[])
     }
 
     TIMING_SECTION("Anomaly", outchannel, &measurement);
+
+
+
 
     /******************************
      * Persistence
