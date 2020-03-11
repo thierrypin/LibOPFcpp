@@ -110,7 +110,7 @@ bool read_mat(const std::string &filename, Mat<T> &data)
         }
     }
     file.close();
-    
+
     return true;
 }
 
@@ -139,7 +139,7 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
         // label
         file.read((char*)&label, sizeof(int));
         labels[i] = label;
-        
+
         for (int j = 0; j < cols; j++)
         {
             file.read((char*)&val, sizeof(T));
@@ -147,7 +147,7 @@ bool read_mat_labels(const std::string &filename, Mat<T> &data, std::vector<int>
         }
     }
     file.close();
-    
+
     return true;
 }
 

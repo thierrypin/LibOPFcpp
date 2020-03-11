@@ -7,13 +7,13 @@
  ******************************************************/
 
 // Copyright 2019 Thierry Moreira
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -248,7 +248,8 @@ const T* Mat<T>::operator[](size_t i) const
 template <class T>
 Mat<T>& Mat<T>::operator=(const Mat<T>& other)
 {
-    if (this != &other) {
+    if (this != &other)
+    {
         this->rows = other.rows;
         this->cols = other.cols;
         this->size = other.size;
@@ -270,7 +271,7 @@ Mat<T> Mat<T>::copy()
         for (size_t j = 0; j < this->cols; j++)
             outrow[j] = row[j];
     }
-    
+
     return std::move(out);
 }
 
@@ -437,7 +438,7 @@ public:
         this->cost = INF;
         this->is_prototype = false;
     }
-    
+
     size_t index;      // Index on the list -- makes searches easier *
     Color color;       // Color on the heap. white: never visiter, gray: on the heap, black: removed from the heap *
     float cost;        // Cost to reach the node
@@ -449,14 +450,14 @@ public:
 
 /**
  * Heap data structure to use as a priority queue
- * 
+ *
  */
 class Heap
 {
 private:
     std::vector<Node> *nodes; // A reference for the original container vector
     std::vector<Node*> vec;   // A vector of pointers to build the heap upon
-    
+
     static bool compare_element(const Node* lhs, const Node* rhs)
     {
         return lhs->cost >= rhs->cost;
@@ -484,7 +485,7 @@ public:
         // Already on the heap
         if ((*this->nodes)[item].color == GRAY)
             make_heap(this->vec.begin(), this->vec.end(), compare_element); // Remake the heap
-        
+
         // New to the heap
         else if ((*this->nodes)[item].color == WHITE)
         {
@@ -556,8 +557,8 @@ private:
     std::vector<Node> nodes; // Learned model
     // List of nodes ordered by cost. Useful for speeding up classification
     // Its not size_t to reduce memory usage, since ML may handle large data
-    std::vector<unsigned int> ordered_nodes; 
-                                             
+    std::vector<unsigned int> ordered_nodes;
+
     // Options
     bool precomputed;
     distance_function<T> distance;
@@ -567,7 +568,7 @@ private:
 
 public:
     SupervisedOPF(bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
-    
+
     void fit(const Mat<T> &train_data, const std::vector<int> &labels);
     std::vector<int> predict(const Mat<T> &test_data);
 
@@ -619,7 +620,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
                 this->nodes[pred].is_prototype = true;
             }
         }
-        
+
 
         // Edge selection
         #pragma omp parallel for default(shared)
@@ -634,7 +635,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
                     weight = this->train_data[s][t];
                 else
                     weight = this->distance(this->train_data[s], this->train_data[t], this->train_data.cols);
-                
+
                 // Assign if smaller than current value
                 if (weight < this->nodes[t].cost)
                 {
@@ -651,7 +652,7 @@ void SupervisedOPF<T>::prim_prototype(const std::vector<int> &labels)
 
 /**
  * Trains the model with the given data and labels.
- * 
+ *
  * Inputs:
  *  - train_data:
  *    - original feature vectors [n_samples, n_features] -- if precomputed == false
@@ -730,12 +731,12 @@ void SupervisedOPF<T>::fit(const Mat<T> &train_data, const std::vector<int> &lab
 
 /**
  * Classify a set of samples using a model trained by SupervisedOPF::fit.
- * 
+ *
  * Inputs:
  *  - test_data:
  *    - original feature vectors [n_test_samples, n_features]      -- if precomputed == false
  *    - distance matrix          [n_test_samples, n_train_samples] -- if precomputed == true
- * 
+ *
  * Returns:
  *  - predictions:
  *    - a vector<int> of size [n_test_samples] with classification outputs.
@@ -782,7 +783,7 @@ std::vector<int> SupervisedOPF<T>::predict(const Mat<T> &test_data)
 
         predictions[i] = this->nodes[min_idx].label;
     }
-    
+
     return predictions;
 }
 
@@ -800,7 +801,7 @@ std::string SupervisedOPF<T>::serialize(uchar flags)
 
     int n_samples = this->train_data.rows;
     int n_features = this->train_data.cols;
-    
+
     // Header
     write_bin<char>(output, "OPF", 3);
     write_bin<uchar>(output, Type::Classifier);
@@ -864,7 +865,7 @@ SupervisedOPF<T> SupervisedOPF<T>::unserialize(const std::string& contents)
     header[3] = '\0';
     if (strcmp(header, "OPF"))
         throw std::invalid_argument("Input is not an OPF serialization");
-    
+
     // Get type and flags
     uchar type = read_bin<uchar>(ifs);
     uchar flags = read_bin<uchar>(ifs);
@@ -993,7 +994,7 @@ public:
     {
         this->pred = -1;
     }
-    
+
     std::set<Pdist> adj; // Node adjacency
     size_t index;        // Index on the list -- makes searches easier
     int label;           // Assigned label
@@ -1035,7 +1036,7 @@ private:
 
 public:
     UnsupervisedOPF(int k=5, bool anomaly=false, float thresh=.1, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
-    
+
     void fit(const Mat<T> &train_data);
     std::vector<int> fit_predict(const Mat<T> &train_data);
     std::vector<int> predict(const Mat<T> &test_data);
@@ -1074,6 +1075,8 @@ UnsupervisedOPF<T>::UnsupervisedOPF(int k, bool anomaly, float thresh, bool prec
 template <class T>
 void UnsupervisedOPF<T>::build_graph()
 {
+    this->sigma_sq = 0.;
+
     // Proportional to the length of the biggest edge
     for (size_t i = 0; i < this->nodes.size(); i++)
     {
@@ -1088,12 +1091,11 @@ void UnsupervisedOPF<T>::build_graph()
                     dist = this->train_data->at(i, j);
                 else
                     dist = this->distance(this->train_data->row(i), this->train_data->row(j), this->train_data->cols);
-                
+
                 bk.insert(j, dist);
             }
         }
 
-        this->sigma_sq = 0.;
         std::vector<Pdist> knn = bk.get_knn();
         for (auto it = knn.cbegin(); it != knn.cend(); ++it)
         {
@@ -1106,9 +1108,9 @@ void UnsupervisedOPF<T>::build_graph()
                 this->sigma_sq = it->second;
         }
     }
-    
+
     this->sigma_sq /= 3;
-    this->sigma_sq = this->sigma_sq * this->sigma_sq;
+    this->sigma_sq = 2 * (this->sigma_sq * this->sigma_sq);
     this->denominator = sqrt(2 * M_PI * this->sigma_sq);
 }
 
@@ -1126,8 +1128,8 @@ void UnsupervisedOPF<T>::build_initialize()
 
         for (it = this->nodes[i].adj.cbegin(); it != this->nodes[i].adj.cend(); ++it)
         {
-            float dist = it->second; // this->distances[i][*it]
-            sum += expf((-dist * dist) / (2 * this->sigma_sq));
+            float dist = it->second;
+            sum += expf((-dist * dist) / this->sigma_sq);
         }
 
         this->nodes[i].rho = sum / div;
@@ -1140,7 +1142,7 @@ void UnsupervisedOPF<T>::build_initialize()
         for (it = this->nodes[i].adj.begin(); it != this->nodes[i].adj.end(); ++it)
         {
             float diff = abs(this->nodes[i].rho - this->nodes[it->first].rho);
-            if (this->delta > diff)
+            if (diff != 0 && this->delta > diff)
                 this->delta = diff;
         }
     }
@@ -1155,6 +1157,7 @@ void UnsupervisedOPF<T>::build_initialize()
 }
 
 // Get the node with the biggest path value
+// TODO: implement it in a more efficient way?
 template <class T>
 int UnsupervisedOPF<T>::get_max()
 {
@@ -1204,12 +1207,13 @@ void UnsupervisedOPF<T>::cluster()
             int t = it->first;
             if (this->nodes[t].value < this->nodes[s].value)
             {
-                float tmp = std::min(this->nodes[s].value, this->nodes[t].rho);
-                if (tmp > this->nodes[t].value)
+                float rho = std::min(this->nodes[s].value, this->nodes[t].rho);
+                // std::cout << rho << " " << this->nodes[t].value << std::endl;
+                if (rho > this->nodes[t].value)
                 {
                     this->nodes[t].label = this->nodes[s].label;
                     this->nodes[t].pred = s;
-                    this->nodes[t].value = tmp;
+                    this->nodes[t].value = rho;
                 }
             }
         }
@@ -1245,7 +1249,7 @@ std::vector<int> UnsupervisedOPF<T>::fit_predict(const Mat<T> &train_data)
     else
         for (size_t i = 0; i < this->nodes.size(); i++)
             labels[i] = this->nodes[i].label;
-    
+
     return labels;
 }
 
@@ -1268,7 +1272,7 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
                     dist = test_data.at(i, j);
                 else
                     dist = this->distance(test_data[i], this->train_data->row(j), this->train_data->cols);
-                
+
                 bk.insert(j, dist);
             }
         }
@@ -1283,7 +1287,7 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
         for (int j = 0; j < n_neighbors; j++)
         {
             float dist = neighbors[j].second; // this->distances[i][*it]
-            sum += expf((-dist * dist) / (2 * this->sigma_sq));
+            sum += expf((-dist * dist) / this->sigma_sq);
         }
 
         float rho = sum / div;
@@ -1298,6 +1302,7 @@ std::vector<int> UnsupervisedOPF<T>::predict(const Mat<T> &test_data)
             // And find which node conquers this test sample
             float maxval = -INF;
             int maxidx = -1;
+
             for (int j = 0; j < n_neighbors; j++)
             {
                 int s = neighbors[j].first;  // idx, distance
@@ -1356,6 +1361,7 @@ float UnsupervisedOPF<T>::quality_metric()
 template <class T>
 void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax, int step, bool precompute)
 {
+    std::cout << "precompute " << precompute << std::endl;
     float best_quality = INF;
     UnsupervisedOPF<float> best_opf;
     DistMat<float> distances;
@@ -1370,7 +1376,8 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
             opf.fit(distances);
         else
             opf.fit(train_data);
-       
+
+        std::cout << k << ": " << opf.n_clusters << std::endl;
         // Compare its clustering grade
         float quality = opf.quality_metric(); // Normalized cut
         if (quality < best_quality)
@@ -1380,6 +1387,15 @@ void UnsupervisedOPF<T>::find_best_k(Mat<float>& train_data, int kmin, int kmax,
         }
 
     }
+
+    if (best_quality == INF)
+    {
+        std::ostringstream ss;
+        ss << "No search with kmin " << kmin << ", kmax " << kmax << ", and step " << step << ". The arguments might be out of order.";
+        std::cerr << ss.str() << std::endl;
+        throw 0;
+    }
+
 
     if (this->precomputed)
         this->train_data = std::shared_ptr<Mat<T>>(&distances, std::default_delete<Mat<T>>());
@@ -1466,7 +1482,7 @@ UnsupervisedOPF<T> UnsupervisedOPF<T>::unserialize(const std::string& contents)
     read_bin<char>(ifs, header, 3);
     header[3] = '\0';
     if (strcmp(header, "OPF"))
-        throw std::invalid_argument("Input is not an OPF serialization");    
+        throw std::invalid_argument("Input is not an OPF serialization");
 
     // Get type and flags
     uchar type = read_bin<uchar>(ifs);

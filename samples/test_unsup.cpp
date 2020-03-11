@@ -56,9 +56,11 @@ typedef timeval timer;
 
 
 /**
- * This example trains and tests the model in five datasets.
+ * This example trains and tests the model in a given dataset (data/ *.dat).
  * For each dataset, we compute testing accuracy and execution time for the regular usage
  * and using precomputed distance matrices.
+ *
+ * Argument frac refers to the fraction of the dataset used, for time purposes.
  */
 int main(int argc, char *argv[])
 {
@@ -100,7 +102,7 @@ int main(int argc, char *argv[])
     set<int> unique_labels;
     for (size_t i = 0; i < labels.size(); i++)
         unique_labels.insert(labels[i]);
-    
+
     cout << unique_labels.size() << " unique labels." << endl;
     TIMING_SECTION("Read data", outchannel, &measurement);
 
