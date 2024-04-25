@@ -57,7 +57,9 @@ Inputs:
 - labels: an int vector with the ground truths.
 
 
-`std::vector<int> predict(const Mat<T> &test_data);`
+```cpp
+std::vector<int> predict(const Mat<T> &test_data);`
+```
 
 Predicts label values for given data.
 
