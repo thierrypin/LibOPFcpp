@@ -31,9 +31,11 @@ Bibtex:
 
 ## Usage
 
-The library was designed to look like scikit-learn. The main class is called OPFClassifier, and it contains one constructor and two functions:
+The library was designed to look like scikit-learn. The two main classes are SupervisedOPF and UnsupervisedOPF, and it contains one constructor and two functions:
 
-### Constructor
+### Supervised
+
+#### Constructor
 ```cpp
 SupervisedOPF(bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
 ```
@@ -43,7 +45,7 @@ precomputed: true if it will receive precomputed distance matrices. False otherw
 distance: distance function, case precomputed == false.
 
 
-### Functions
+#### Functions
 
 ```cpp
 void fit(const Mat<T> &train_data, const std::vector<int> &labels);
@@ -68,6 +70,46 @@ Inputs:
 
 Returns:
 - A vector of `n_test_samples` integers corresponding to predicted classes.
+
+
+### Unsupervised
+
+#### Constructor
+```cpp
+UnsupervisedOPF(int k=5, bool anomaly=false, float thresh=.1, bool precomputed=false, distance_function<T> distance=euclidean_distance<T>);
+```
+
+Inputs:
+- k: The number of clusters
+- anomaly: True if it is a problem of anomaly detection, false otherwise
+- threshold: Threshold value for clustering
+- precomputed: true if it will receive precomputed distance matrices. False otherwise.
+- distance: distance function, case precomputed == false.
+
+
+#### Functions
+
+```cpp
+void fit(const Mat<T> &train_data);
+```
+
+Fits the classifier.
+
+Inputs:
+- train_data: if `precomputed == false`, a matrix where the rows are the samples and the columns are the features. If `precomputed == true`, a distance matrix of `size n_samples x n_samples`.
+
+```cpp
+std::vector<int> predict(const Mat<T> &test_data);`
+```
+
+Predicts label values for given data.
+
+Inputs:
+- test_data: if `precomputed == false`, a matrix where the rows are the samples and the columns are the features. If `precomputed == true`, a distance matrix of size `n_test_samples x n_train_samples`.
+
+Returns:
+- A vector of `n_test_samples` integers corresponding to predicted classes.
+
 
 
 ### The Mat class
